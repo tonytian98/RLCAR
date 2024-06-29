@@ -1,5 +1,13 @@
 import cv2
 import pygame
+from time import sleep
+
+
+class wall:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
 
 # Initialize Pygame
 pygame.init()
@@ -25,7 +33,9 @@ print(len(largest_contours))
 # Loop through the largest contours to extract the line segments
 for contour in largest_contours:
     # Approximate the contour to a polygon with a maximum of 4 edges
-    approx = cv2.approxPolyDP(contour, 4, True)
+    perimeter = cv2.arcLength(contour, True)
+    epsilon = 0.004 * cv2.arcLength(contour, True)
+    approx = cv2.approxPolyDP(contour, epsilon, True)
 
     # Loop through the edges of the polygon to extract the line segments
     for i in range(len(approx)):
@@ -35,10 +45,11 @@ for contour in largest_contours:
 
         # Add the line segment to the list
         line_segments.append((p1[0], p1[1], p2[0], p2[1]))
+    print(len(line_segments))
+
 
 # Create a Pygame window
 screen = pygame.display.set_mode((image.shape[1], image.shape[0]))
-print(len(line_segments))
 
 font = pygame.font.Font(None, 36)
 
@@ -69,5 +80,4 @@ for i, line_segment in enumerate(line_segments):
 # Update the Pygame display
 pygame.display.update()
 
-while True:
-    pass
+sleep(100)
