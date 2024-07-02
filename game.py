@@ -20,7 +20,7 @@ track = pygame.image.load("processed_map1.png")
 car_image = pygame.image.load("car.png")
 car_image = pygame.transform.scale(car_image, (15, 10))
 
-car = Car(200, 200, 0, -90 + 360 * 3, max_backward_speed=2)
+car = Car(200, 200, 0, 0, max_backward_speed=2)
 # car_x, car_y = 200, 200
 # car_angle = -90 + 360 * 3
 
@@ -48,7 +48,7 @@ def rotate_center(image, angle):
 running = True
 while running:
     for event in pygame.event.get():
-        if event.type == pygame.QUIT:
+        if event.type == pygame.QUIT or pygame.key.get_pressed()[pygame.K_ESCAPE]:
             running = False
 
     keys = pygame.key.get_pressed()

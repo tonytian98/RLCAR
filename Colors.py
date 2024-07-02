@@ -21,7 +21,3 @@ class Colors(Enum):
     GOLD = (255, 215, 0)
     LAVENDER = (230, 230, 250)
     AQUA = (0, 255, 255)
-
-
-if __name__ == "__main__":
-    print(Colors.CYAN.value)

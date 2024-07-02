@@ -1,4 +1,5 @@
 import math
+import numpy as np
 from abc import ABC
 from Colors import Colors
 
@@ -70,6 +71,17 @@ class Line(ABC):
             x, y = showIntersection[0].coordinates
             return Coordinate2D(x, y)
         return None
+
+    def calculate_angle(self) -> float:
+        return np.degrees(
+            np.math.atan2(
+                (self.get_a().get_y() - self.get_b().get_y()),
+                (self.get_a().get_x() - self.get_b().get_x()),
+            )
+        )
+
+    def calculate_perpendicular_angle(self) -> float:
+        return 90 + self.calculate_angle()
 
     def get_color(self) -> tuple[float, float, float]:
         return self.color.value

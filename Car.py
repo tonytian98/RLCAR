@@ -82,10 +82,9 @@ class Car:
 
     def decelerate(self) -> None:
         if self.car_speed > -self.max_backward_speed:
-            self.card_speed = max(
+            self.car_speed = max(
                 -self.max_backward_speed, self.car_speed - self.acceleration
             )
-            print("decelerating, speed: ", self.car_speed)
 
     def update_car_position(self) -> None:
         self.car_x += self.car_speed * np.cos(np.radians(self.car_angle))
