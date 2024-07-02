@@ -3,6 +3,7 @@ import math
 import sys
 import numpy as np
 from time import sleep
+from Car import Car
 
 # Initialize Pygame
 pygame.init()
@@ -16,11 +17,12 @@ pygame.display.set_caption("Car Racing Game")
 track = pygame.image.load("processed_map1.png")
 
 # Car settings
-car = pygame.image.load("car.png")
-car = pygame.transform.scale(car, (15, 10))
-car_x, car_y = 200, 200
-car_speed = 5
-car_angle = -90 + 360 * 3
+car_image = pygame.image.load("car.png")
+car_image = pygame.transform.scale(car_image, (15, 10))
+
+car = Car(200, 200, 0, -90 + 360 * 3, max_backward_speed=2)
+# car_x, car_y = 200, 200
+# car_angle = -90 + 360 * 3
 
 # Ray settings
 num_rays = 5
@@ -37,10 +39,11 @@ def rotate_center(image, angle):
     return rotated_image, rotated_rect
 
 
-max_forward_speed = 4
-max_backward_speed = 2
-car_speed = 0
-acceleration = 0.1
+# max_forward_speed = 4
+# max_backward_speed = 0
+# acceleration = 0.1
+# car_speed = 0
+
 # Game loop
 running = True
 while running:
@@ -50,28 +53,24 @@ while running:
 
     keys = pygame.key.get_pressed()
     if keys[pygame.K_LEFT]:
-        car_angle += 5
+        car.turn_left()
     if keys[pygame.K_RIGHT]:
-        car_angle -= 5
+        car.turn_right()
     # Add these variables to the global scope
 
     # Modify the key press handling section
     if keys[pygame.K_UP]:
-        if car_speed < max_forward_speed:
-            car_speed += acceleration
+        car.accelerate()
 
     if keys[pygame.K_DOWN]:
-        if car_speed > -max_backward_speed:
-            car_speed -= acceleration
+        car.decelerate()
 
-    car_x += car_speed * np.cos(np.radians(car_angle))
-    car_y -= car_speed * np.sin(np.radians(car_angle))
-
-    car_rect = car.get_rect(center=(car_x, car_y))
+    car_x, car_y = car.update_car_position()
+    car_rect = car_image.get_rect(center=(car_x, car_y))
     track_color = track.get_at((int(car_x), int(car_y)))
     if track_color == (0, 255, 0):  # RGB value for green
         running = False
-
+    """
     # Draw rays
     rays = []
     num_rays_side = math.ceil(num_rays / 2)
@@ -90,13 +89,13 @@ while running:
             ray_width = 3
             ray = pygame.draw.line(screen, ray_color, ray_start, ray_end, ray_width)
             rays.append(ray)
-
+    """
     # Modify the drawing section
-    if car_speed >= 0:
-        rotated_car, car_rect = rotate_center(car, car_angle)
+    if car.get_car_speed() >= 0:
+        rotated_car, car_rect = rotate_center(car_image, car.get_car_angle())
     else:  # car_speed < 0
         rotated_car, car_rect = rotate_center(
-            pygame.transform.flip(car, False, True), car_angle
+            pygame.transform.flip(car_image, False, True), car.get_car_angle()
         )
     screen.fill((0, 0, 0))
     screen.blit(track, (0, 0))
@@ -107,17 +106,17 @@ while running:
 
     # Display car speed on the top left corner
     speed_text = pygame.font.Font(None, 30).render(
-        f"Speed: {car_speed}", True, (255, 255, 255)
+        f"Speed: {car.get_car_speed()}", True, (255, 255, 255)
     )
     screen.blit(speed_text, (10, 10))
 
     # Display ray lengths on the top right corner
-    for i, ray in enumerate(rays):
+    """for i, ray in enumerate(rays):
         length_text = pygame.font.Font(None, 30).render(
             f"Ray {i+1}: {ray.width}", True, (255, 255, 255)
         )
         screen.blit(length_text, (WIDTH - length_text.get_width() - 10, 10 + 30 * i))
-
+    """
     pygame.display.flip()
     pygame.time.Clock().tick(60)
 

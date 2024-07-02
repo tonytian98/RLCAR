@@ -1,7 +1,8 @@
 import math
 from abc import ABC
-from typing import Any
-import Colors
+from Colors import Colors
+
+from sympy import Point, Line, Segment
 
 
 class Coordinate2D:
@@ -31,7 +32,7 @@ class Coordinate2D:
 
 
 class Line(ABC):
-    def __init__(self, a: Coordinate2D, b: Coordinate2D, color: Colors = Colors.WHITE):
+    def __init__(self, a: Coordinate2D, b: Coordinate2D, color=Colors.WHITE.value):
         self.a = a
         self.b = b
         self.color = color
@@ -50,14 +51,28 @@ class Line(ABC):
 
     def get_midpoint(self) -> Coordinate2D:
         return Coordinate2D(
-            (self.a[0].x + self.b[0].x) / 2, (self.a[0].y + self.b[0].y) / 2
+            (self.get_a().get_x() + self.get_b().get_x()) / 2,
+            (self.get_a().get_y() + self.get_b().get_y()) / 2,
         )
 
-    def get_color(self) -> Colors:
-        return self.color
+    def intersect(self, other: "Line") -> Coordinate2D:
+        p1, p2, p3, p4 = (
+            Point(self.get_a().get_x(), self.get_a().get_y()),
+            Point(self.get_b().get_x(), self.get_b().get_y()),
+            Point(other.get_a().get_x(), other.get_a().get_y()),
+            Point(other.get_b().get_x(), other.get_b().get_y()),
+        )
+        l1 = Segment(p1, p2)
+        s1 = Segment(p3, p4)
+        showIntersection = l1.intersection(s1)
 
-    def set_color(self, color: Colors):
-        self.color = color
+        if showIntersection:
+            x, y = showIntersection[0].coordinates
+            return Coordinate2D(x, y)
+        return None
+
+    def get_color(self) -> tuple[float, float, float]:
+        return self.color.value
 
 
 class Reward_Line(Line):
@@ -74,7 +89,7 @@ class Reward_Line(Line):
 
 class Wall(Line):
     def __init__(self, a: Coordinate2D, b: Coordinate2D, id: int):
-        super().__init__(a, b, Colors.CYAN)
+        super().__init__(a, b, Colors.GREEN)
         self.id = id
 
     def get_id(self) -> int:

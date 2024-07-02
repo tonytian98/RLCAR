@@ -40,11 +40,28 @@ def find_intersection(x1, y1, q, x2, y2, x3, y3):
         return None  # No valid intersection
 
 
+def line_intersection(x1, y1, x2, y2, x3, y3, x4, y4):
+    denominator = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+
+    if denominator == 0:
+        return None  # Lines are parallel, no intersection
+
+    numerator1 = (x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)
+    numerator2 = (x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)
+
+    x = numerator1 / denominator
+    y = numerator2 / denominator
+
+    return x, y
+
+
 # Example usage
 x1, y1 = 10, 0
 q = 90  # in degrees
 x2, y2 = 0, 0
 x3, y3 = 100, 100
 
+x4, y4 = 90, 90
 intersection = find_intersection(x1, y1, q, x2, y2, x3, y3)
-print(f"Intersection: {intersection}")
+
+print(f"Intersection: {line_intersection(x1, y1, x2, y2, x3, y3, x4, y4)}")
