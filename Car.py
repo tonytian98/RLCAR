@@ -1,4 +1,5 @@
 import numpy as np
+from Objects2D import Coordinate2D
 
 
 class Car:
@@ -90,3 +91,6 @@ class Car:
         self.car_x += self.car_speed * np.cos(np.radians(self.car_angle))
         self.car_y -= self.car_speed * np.sin(np.radians(self.car_angle))
         return self.car_x, self.car_y
+
+    def get_Coordinate2D(self) -> Coordinate2D:
+        return Coordinate2D(self.get_car_x(), self.get_car_y())

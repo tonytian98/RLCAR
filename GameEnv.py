@@ -1,5 +1,5 @@
 import pygame
-from Objects2D import Coordinate2D, Line, Reward_Line, Wall
+from Objects2D import Coordinate2D, Line, Reward_Line, Wall, RayObj
 from Colors import Colors
 from Car import Car
 
@@ -7,20 +7,39 @@ from Car import Car
 class GameEnv:
     def __init__(
         self,
-        game_width: int = 800,
-        game_height: int = 600,
-        background_color=Colors.BLACK.value,
+        game_width: float = 800,
+        game_height: float = 600,
+        background_color: tuple[float, float, float] = Colors.BLACK.value,
         car_image_path: str = "car1.png",
+        start_speed=0,
+        max_forward_speed: float = 3,
+        max_backward_speed: float = 0,
+        turn_angle: float = 5,
+        acceleration: float = 0.1,
     ) -> None:
         self.walls: list[list[Wall, Wall]] = [[], []]
         self.reward_lines: list[Reward_Line] = []
-        pygame.init()
-        self.screen = pygame.display.set_mode((game_width, game_height))
-        self.screen.fill(background_color)
-        self.fonts = {36: pygame.font.Font(None, 36)}
-        self.car_image_path = car_image_path
+        self.game_width: float = game_width
+        self.game_height: float = game_height
+        self.background_color: tuple[float, float, float] = background_color
+        self.car_image_path: str = car_image_path
+        self.screen: pygame.Surface = None
+        self.static_background: pygame.Surface = None
+        self.show_speed: bool = False
+        self.show_rays: bool = False
+        self.rays: list[RayObj] = []
+        self.start_speed = start_speed
+        self.max_forward_speed = max_forward_speed
+        self.max_backward_speed = max_backward_speed
+        self.turn_angle = turn_angle
+        self.acceleration = acceleration
 
-    def _draw_line(self, line: Line, width=2):
+    def _draw_line(
+        self,
+        line: Line,
+        width: int = 2,
+        update_display: bool = False,
+    ):
         pygame.draw.line(
             self.screen,
             line.get_color(),
@@ -28,8 +47,15 @@ class GameEnv:
             line.get_b().get_coordinates(),
             width,
         )
+        if update_display:
+            pygame.display.update()
 
-    def _draw_text(self, text: str, coord: Coordinate2D, color=Colors.GOLD.value):
+    def _draw_text(
+        self,
+        text: str,
+        coord: Coordinate2D,
+        color: tuple[float, float, float] = Colors.GOLD.value,
+    ):
         text = self.fonts[36].render(f"{text}", True, color)
         text_rect = text.get_rect()
         text_rect.center = coord.get_coordinates()
@@ -49,12 +75,12 @@ class GameEnv:
                 )
                 idx += 1
 
-    def get_walls(self, flat=False):
+    def get_walls(self, flat: bool = False):
         if flat:
             return [wall for wall in self.walls[0] + self.walls[1]]
         return self.walls
 
-    def get_one_side_walls(self, start_idx):
+    def get_one_side_walls(self, start_idx: int):
         return (
             self.walls[start_idx]
             if start_idx <= len(self.walls) and start_idx >= 0
@@ -99,15 +125,43 @@ class GameEnv:
                 self.reward_lines.append(reward_Line)
                 assigned_wall2s.append(closest_wall)
 
+    def generate_ray(self):
+        self.rays = []
+        self.rays.append(
+            RayObj(self.car.get_Coordinate2D(), 360 - self.car.get_car_angle())
+        )
+
+    def _draw_rays(self):
+        for ray in self.rays:
+            min_distance = 99999999.9
+            first_intersection = None
+            for wall in self.get_walls(flat=True):
+                intersection = ray.calculate_intersection(wall)
+                if intersection:
+                    distance = intersection.calculate_distance(ray.get_a())
+                    if distance < min_distance:
+                        min_distance = distance
+                        first_intersection = intersection
+
+            if first_intersection:
+                line = Line(ray.get_a(), first_intersection, Colors.WHITE)
+                self._draw_line(line, width=1, update_display=True)
+
     def _draw_walls(self):
         for wall in self.get_walls(flat=True):
-            self._draw_line(wall, width=4)
+            self._draw_line(wall, width=5)
 
     def _draw_reward_lines(self, show_reward_sequence=True):
         for line in self.get_reward_lines():
             self._draw_line(line, width=2)
             if show_reward_sequence:
                 self._draw_text(line.get_reward_sequence(), line.get_midpoint())
+
+    def _draw_speed(self):
+        speed_text = pygame.font.Font(None, 30).render(
+            f"Speed: {round(self.car.get_car_speed(), 2)}", True, Colors.WHITE.value
+        )
+        self.screen.blit(speed_text, (10, 10))
 
     def initialize_game_data(
         self, walls_data: list[list[list[float, float]]], show_game=True
@@ -119,34 +173,51 @@ class GameEnv:
         next_line = self.get_reward_lines()[
             (starting_index + 1) % len(self.get_reward_lines())
         ]
-        angle_correction = (
-            180 if next_line.get_a().get_x() < starting_line.get_a().get_x() else 0
-        )
-        self.game_car = GameCar(
+
+        direction_line = Line(starting_line.get_midpoint(), next_line.get_midpoint())
+        self.car = GameCar(
             starting_line.get_midpoint().get_x(),
             starting_line.get_midpoint().get_y(),
-            start_speed=0,
-            # car_angle=starting_line.calculate_angle() + angle_correction,
-            car_angle=0,
-            show_game=show_game,
-            screen=self.screen,
-            path_to_image=self.car_image_path,
+            start_speed=self.start_speed,
+            car_angle=180 - direction_line.calculate_angle(),
+            max_forward_speed=self.max_forward_speed,
+            max_backward_speed=self.max_backward_speed,
+            turn_angle=self.turn_angle,
+            acceleration=self.acceleration,
         )
-        if show_game:
-            self.draw(
-                show_walls=True, show_reward_lines=True, show_reward_sequence=True
-            )
+        self.generate_ray()
 
-    def draw(self, show_walls=True, show_reward_lines=True, show_reward_sequence=True):
+    def draw(
+        self,
+        show_walls=True,
+        show_reward_lines=True,
+        show_reward_sequence=True,
+        show_speed=True,
+        show_rays=True,
+    ):
+        pygame.init()
+        self.screen = pygame.display.set_mode((self.game_width, self.game_height))
+        self.screen.fill(self.background_color)
+        self.fonts = {36: pygame.font.Font(None, 36)}
+
         if show_walls:
             print("drawing walls")
             self._draw_walls()
-            pygame.display.update()
+
         if show_reward_lines:
             print("drawing reward lines")
             self._draw_reward_lines(show_reward_sequence=show_reward_sequence)
-            pygame.display.update()
-        self.game_car.draw_car()
+
+        pygame.display.update()
+        pygame.image.save(self.screen, "static_background.png")
+        self.static_background = pygame.image.load("static_background.png")
+        self.car.initial_draw_car(self.screen)
+        if show_speed:
+            self.show_speed = show_speed
+            self._draw_speed()
+        if show_rays:
+            self.show_rays = show_rays
+            self._draw_rays()
 
     def start_game(self):
         running = True
@@ -154,18 +225,17 @@ class GameEnv:
             for event in pygame.event.get():
                 if (
                     event.type == pygame.QUIT
-                    or pygame.key.get_pressed()[pygame.K_ESCAPE]
+                    # or pygame.key.get_pressed()[pygame.K_ESCAPE]
                 ):
                     running = False
 
             keys = pygame.key.get_pressed()
+
             if keys[pygame.K_LEFT]:
                 self.car.turn_left()
             if keys[pygame.K_RIGHT]:
                 self.car.turn_right()
-            # Add these variables to the global scope
 
-            # Modify the key press handling section
             if keys[pygame.K_UP]:
                 self.car.accelerate()
 
@@ -173,29 +243,36 @@ class GameEnv:
                 self.car.decelerate()
 
             car_x, car_y = self.car.update_car_position()
-            car_rect = self.car_image.get_rect(center=(car_x, car_y))
-            track_color = self.track.get_at((int(car_x), int(car_y)))
-            if track_color == (0, 255, 0):  # RGB value for green
+            self.generate_ray()
+
+            # car_rect = self.car_image.get_rect(center=(car_x, car_y))
+            background_color = self.static_background.get_at((int(car_x), int(car_y)))
+            if background_color == self.get_walls(flat=True)[0].get_color():
                 running = False
 
+            self.screen.blit(self.static_background, (0, 0))
+            self.car.draw_car()
+            if self.show_speed:
+                self._draw_speed()
+            if self.show_rays:
+                self._draw_rays()
+            pygame.display.flip()
+            pygame.time.Clock().tick(60)
 
-class GameCar:
+
+class GameCar(Car):
     def __init__(
         self,
         car_x: float = 200,
         car_y: float = 200,
         start_speed=0,
         car_angle: float = 0,
-        max_forward_speed: float = 4,
+        max_forward_speed: float = 3,
         max_backward_speed: float = 0,
         turn_angle: float = 5,
-        show_game=True,
-        path_to_image: str = "car.png",
-        resize_width: float = 15,
-        resize_height: float = 10,
-        screen=None,
+        acceleration: float = 0.1,
     ):
-        self.car = Car(
+        super().__init__(
             start_x=car_x,
             start_y=car_y,
             start_speed=start_speed,
@@ -203,13 +280,9 @@ class GameCar:
             max_forward_speed=max_forward_speed,
             max_backward_speed=max_backward_speed,
             turn_angle=turn_angle,
+            acceleration=acceleration,
         )
-        if show_game:
-            car_image = pygame.image.load(path_to_image)
-            self.car_image = pygame.transform.scale(
-                car_image, (resize_width, resize_height)
-            )
-            self.screen = screen
+        self.screen = None
 
     def _rotate_car(self, angle: float, negative_speed=False):
         if negative_speed:
@@ -219,16 +292,40 @@ class GameCar:
         rotated_rect = rotated_image.get_rect(center=rect.center)
         return rotated_image, rotated_rect
 
-    def draw_car(self):
-        if self.car.get_car_speed() >= 0:
-            rotated_car, car_rect = self._rotate_car(self.car.get_car_angle())
+    def initial_draw_car(
+        self,
+        screen,
+        path_to_image: str = "car.png",
+        resize_width: float = 15,
+        resize_height: float = 10,
+    ):
+        car_image = pygame.image.load(path_to_image)
+        self.car_image = pygame.transform.scale(
+            car_image, (resize_width, resize_height)
+        )
+        self.screen = screen
+        if self.get_car_speed() >= 0:
+            rotated_car, car_rect = self._rotate_car(self.get_car_angle())
         else:  # car_speed < 0
-            rotated_car, car_rect = self._rotate_center(self.car.get_car_angle(), True)
+            rotated_car, car_rect = self._rotate_center(self.get_car_angle(), True)
         self.screen.blit(
             rotated_car,
             (
-                self.car.get_car_x() - car_rect.width // 2,
-                self.car.get_car_y() - car_rect.height // 2,
+                self.get_car_x() - car_rect.width // 2,
+                self.get_car_y() - car_rect.height // 2,
             ),
         )
         pygame.display.flip()
+
+    def draw_car(self):
+        if self.get_car_speed() >= 0:
+            rotated_car, car_rect = self._rotate_car(self.get_car_angle())
+        else:  # car_speed < 0
+            rotated_car, car_rect = self._rotate_center(self.get_car_angle(), True)
+        self.screen.blit(
+            rotated_car,
+            (
+                self.get_car_x() - car_rect.width // 2,
+                self.get_car_y() - car_rect.height // 2,
+            ),
+        )

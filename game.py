@@ -106,7 +106,7 @@ while running:
 
     # Display car speed on the top left corner
     speed_text = pygame.font.Font(None, 30).render(
-        f"Speed: {car.get_car_speed()}", True, (255, 255, 255)
+        f"Speed: {round(car.get_car_speed(), 2)}", True, (255, 255, 255)
     )
     screen.blit(speed_text, (10, 10))
 
