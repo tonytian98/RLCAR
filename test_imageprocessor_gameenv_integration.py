@@ -22,7 +22,7 @@ if __name__ == "__main__":
         show_walls=True,
         show_reward_lines=True,
         show_reward_sequence=True,
-        show_rays=True,
+        show_rays=False,
         show_speed=True,
     )
     game_env.start_game()

@@ -1,5 +1,5 @@
 import numpy as np
-from Objects2D import Coordinate2D
+from shapely.geometry import Point
 
 
 class Car:
@@ -87,10 +87,21 @@ class Car:
                 -self.max_backward_speed, self.car_speed - self.acceleration
             )
 
-    def update_car_position(self) -> None:
+    def update_car_position(self) -> tuple[float, float]:
+        """
+        Updates the car's position based on its current speed and angle.
+
+        Returns:
+        - tuple[float, float]: A tuple containing the updated car's x and y coordinates.
+
+        The method calculates the new x and y coordinates of the car based on its current speed and angle.
+        The car's x coordinate is updated by adding the product of its speed and the cosine of its angle.
+        The car's y coordinate is updated by subtracting the product of its speed and the sine of its angle.
+        The updated coordinates are then returned as a tuple.
+        """
         self.car_x += self.car_speed * np.cos(np.radians(self.car_angle))
         self.car_y -= self.car_speed * np.sin(np.radians(self.car_angle))
         return self.car_x, self.car_y
 
-    def get_Coordinate2D(self) -> Coordinate2D:
-        return Coordinate2D(self.get_car_x(), self.get_car_y())
+    def get_Coordinate2D(self) -> tuple[float, float]:
+        return self.get_car_x(), self.get_car_y()

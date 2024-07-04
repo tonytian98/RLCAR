@@ -96,21 +96,23 @@ class GameEnv:
     def set_reward_lines_from_walls(
         self,
     ) -> None:
+        print("beginning")
         wall1s = self.get_one_side_walls(0)
         wall2s = self.get_one_side_walls(1)
         assigned_wall2s = []
         for wall1 in wall1s:
-            mid_point = wall1.get_midpoint()
+            mid_point = wall1.get_a()
             min_distance = 99999999.9
             closest_wall = None
 
             for wall2 in wall2s:
-                distance = wall2.get_midpoint().calculate_distance(mid_point)
+                distance = wall2.get_a().calculate_distance(mid_point)
                 if distance < min_distance and wall2 not in assigned_wall2s:
                     min_distance = distance
                     closest_wall = wall2
+            print(closest_wall)
             reward_Line = Reward_Line(
-                mid_point, closest_wall.get_midpoint(), len(self.reward_lines)
+                mid_point, closest_wall.get_a(), len(self.reward_lines)
             )
             intersect = False
             for wall in self.get_walls(flat=True):

@@ -13,7 +13,7 @@ class ImageProcessor:
         if resize:
             self.image = cv2.resize(self.image, (resize[0], resize[1]))
 
-    def _find_longest_list(self, lists: list[list[float]]) -> tuple[list[float], int]:
+    def _find_longest_list(self, lists: list[list]) -> tuple[list[float], int]:
         longest_list = max(lists, key=len, default=None)
         if longest_list:
             length_difference = len(longest_list) - len(min(lists, key=len))
@@ -21,7 +21,20 @@ class ImageProcessor:
         else:
             return None, 0
 
-    def find_contour_segments(self):
+    def find_contour_segments(self) -> list[list[float, float, float, float]]:
+        """
+        This method finds the two largest contours in the image, approximates them to polygons,
+        and extracts the line segments from these polygons.
+
+        Parameters:
+        None
+
+        Returns:
+        list[list[float]]: A list of two lists, where each inner list contains the line segments
+                        of the corresponding contour. Each line segment is represented as a list
+                        of four floats: [x1, y1, x2, y2], where (x1, y1) and (x2, y2) are the
+                        coordinates of the start and end points of the line segment, respectively.
+        """
         # Convert the image to grayscale
         gray_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
 
@@ -55,3 +68,45 @@ class ImageProcessor:
             del longest_segment[-length_difference:]
 
         return segments
+
+    def find_segment_points(
+        self, segments: list[float, float, float, float]
+    ) -> list[tuple[float, float]]:
+        """
+        This method extracts the start points of each line segment from a list of line segments.
+
+        Parameters:
+        segments (list[float, float, float, float]): A list of line segments, where each segment is represented as a list of four floats: [x1, y1, x2, y2].
+
+        Returns:
+        list[tuple[float, float]]: A list of tuples representing the start points of each line segment. Each tuple contains the x and y coordinates of the start point.
+
+        """
+        return [(x1, y1) for x1, y1, x2, y2 in segments]
+
+    def assign_closest_points(
+        self, points1: list[tuple[float, float]], points2: [tuple[float, float]]
+    ) -> list[list[tuple[float, float]]]:
+        """
+        This function finds the closest point in 'points2' for each point in 'points1' and returns a list of these closest points.
+        The function removes the assigned closest point from 'points2' to avoid duplicates.
+
+        Parameters:
+        points1 (list[tuple[float, float]]): A list of tuples representing the coordinates of points.
+        points2 (list[tuple[float, float]]): A list of tuples representing the coordinates of points.
+
+        Returns:
+        list[list[tuple[float, float]]]: A list of tuples representing the closest points in 'points2' for each point in 'points1'.
+
+        Raises:
+        ValueError: If 'points1' or 'points2' is empty.
+        """
+        r: list[list[tuple[float, float]]] = []
+        for point1 in points1:
+            closest_point2 = sorted(
+                [point2 for point2 in points2],
+                key=lambda x: (x[0] - point1[0]) ** 2 + (x[1] - point1[1]) ** 2,
+            )[0]
+            r.append(tuple([point1, closest_point2]))
+            points2.remove(closest_point2)
+        return r
