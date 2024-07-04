@@ -1,4 +1,4 @@
-import numpy as np
+import math
 from shapely.geometry import Point
 
 
@@ -99,9 +99,12 @@ class Car:
         The car's y coordinate is updated by subtracting the product of its speed and the sine of its angle.
         The updated coordinates are then returned as a tuple.
         """
-        self.car_x += self.car_speed * np.cos(np.radians(self.car_angle))
-        self.car_y -= self.car_speed * np.sin(np.radians(self.car_angle))
+        self.car_x += self.car_speed * math.cos(math.radians(self.car_angle))
+        self.car_y -= self.car_speed * math.sin(math.radians(self.car_angle))
         return self.car_x, self.car_y
 
-    def get_Coordinate2D(self) -> tuple[float, float]:
-        return self.get_car_x(), self.get_car_y()
+    def get_shapely_point(self) -> Point:
+        return Point([self.car_x, self.car_y])
+
+    def get_angle_in_radians(self) -> float:
+        return math.radians(self.car_angle)
