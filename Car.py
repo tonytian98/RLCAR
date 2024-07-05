@@ -100,7 +100,7 @@ class Car:
         The updated coordinates are then returned as a tuple.
         """
         self.car_x += self.car_speed * math.cos(math.radians(self.car_angle))
-        self.car_y -= self.car_speed * math.sin(math.radians(self.car_angle))
+        self.car_y += self.car_speed * math.sin(math.radians(self.car_angle))
         return self.car_x, self.car_y
 
     def get_shapely_point(self) -> Point:

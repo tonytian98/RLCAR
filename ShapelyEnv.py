@@ -3,7 +3,9 @@ import geopandas as gpd
 import matplotlib.pyplot as plt
 from ImageProcessor import ImageProcessor
 from Car import Car
-import math
+from Rule import RuleKeyboard, Rule
+import time
+from pynput import keyboard
 
 
 class ShapeEnv:
@@ -16,7 +18,40 @@ class ShapeEnv:
         self.track: Polygon = None
         self.inverse_track: Polygon = None
         self.segmented_track_in_order = []
+        self.car: Car = None
         self.rays = []
+        self.rule: Rule = None
+
+        plt.ion()
+        self.fig, self.ax = plt.subplots(1, 1)
+        self.fig.canvas.draw()
+        plt.show(block=False)
+
+    def set_track_environment(self, img_processor: ImageProcessor):
+        """
+        This method sets up the track environment based on the given image processor.
+
+        Parameters:
+        img_processor (ImageProcessor): An instance of the ImageProcessor class, which contains the image data.
+
+        Returns:
+        None. The method sets up the track environment by calling other methods within the ShapeEnv class.
+        """
+
+        segments = img_processor.find_contour_segments()
+        outer = img_processor.find_segment_points(segments[0])
+        inner = img_processor.find_segment_points(segments[1])
+        game_env.set_track_from_segment_points(outer, inner)
+        game_env.set_walls(segments)
+        game_env.set_reward_lines_from_walls()
+        game_env.set_inverse_track()
+        game_env.segment_track()
+
+    def set_car(self, car: Car):
+        self.car = car
+
+    def set_rule(self, rule: Rule):
+        self.rule = rule
 
     def set_track_from_segment_points(self, outer, inner):
         outer_polygon = Polygon(outer)
@@ -194,12 +229,11 @@ class ShapeEnv:
         return result
 
     # only 9 nine rays no matter the situation
-    def update_rays(self, car: Car):
-        angle = car.get_car_angle()
-        car_point = car.get_shapely_point()
+    def update_rays(self):
+        angle = self.car.get_car_angle()
+        car_point = self.car.get_shapely_point()
         self.rays = []
         unstopping_ray_endpoints = set()
-        print(angle)
         # [22.5, 67.5)
         if angle % 360 >= 90 / 4 * 1 and angle % 360 < 90 / 4 * 3:
             """
@@ -281,39 +315,57 @@ class ShapeEnv:
             unstopping_ray = LineString([(car_point.x, car_point.y), (x, y)])
             self.rays.append(self.get_stopped_ray(unstopping_ray, car_point))
 
-    def plot_polygon(self, shapes: list):
+    def plot_polygon(self, shapes: list, show=True, save=False):
         geos = gpd.GeoSeries(shapes)
         df = gpd.GeoDataFrame({"geometry": geos})
-        df.plot()
-        plt.show()
+        df.plot(ax=self.ax)
+        plt.pause(0.0001)
+
+        if save:
+            current_time = time.time()
+            plt.save(f"figure_{current_time}.png")
+
+    def game_end(self) -> bool:
+        return self.inverse_track.contains(self.car.get_shapely_point())
+
+    def start_game_keyboard(self, show=True):
+        running = True
+        listener = keyboard.Listener(
+            on_press=self.on_press,
+        )
+        listener.start()
+        self.update_rays()
+        if show:
+            game_env.plot_polygon([game_env.inverse_track] + [car.get_shapely_point()])
+
+        while running:  # print
+            self.update_rays()
+            self.car.update_car_position()
+            game_env.plot_polygon([car.get_shapely_point()])
+            running = not self.game_end()
+
+    def on_press(self, key):
+        if key == keyboard.Key.up:
+            self.car.accelerate()
+        if key == keyboard.Key.down:
+            self.car.decelerate()
+        if key == keyboard.Key.left:
+            self.car.turn_left()
+        if key == keyboard.Key.right:
+            self.car.turn_right()
 
 
 if __name__ == "__main__":
     width = 800
     height = 600
 
-    # image processing
+    # object creation
     img_processor = ImageProcessor("map1.png", resize=[width, height])
+    game_env = ShapeEnv(width, height)
+    car = Car(650, 100, 0, 90)
 
-    segments = img_processor.find_contour_segments()
-    outer = img_processor.find_segment_points(segments[0])
-    inner = img_processor.find_segment_points(segments[1])
-
-    # ####
-    # game env
-    ## track processing
-    game_env = ShapeEnv()
-    game_env.set_track_from_segment_points(outer, inner)
-    game_env.set_walls(segments)
-    game_env.set_reward_lines_from_walls()
-    game_env.set_inverse_track()
-    game_env.segment_track()
-
-    # ####
-
-    # car
-    car = Car(650, 100, 0, -10)
-    game_env.update_rays(car)
-    game_env.plot_polygon(
-        [game_env.inverse_track] + [car.get_shapely_point()] + game_env.rays
-    )
+    # environment setup
+    game_env.set_track_environment(img_processor)
+    game_env.set_car(car)
+    game_env.set_rule(RuleKeyboard(game_env.car))
+    game_env.start_game_keyboard(show=True)
