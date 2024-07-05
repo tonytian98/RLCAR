@@ -13,6 +13,9 @@ class ImageProcessor:
         if resize:
             self.image = cv2.resize(self.image, (resize[0], resize[1]))
 
+    def get_image_path(self):
+        return self.image_path
+
     def _find_longest_list(self, lists: list[list]) -> tuple[list[float], int]:
         longest_list = max(lists, key=len, default=None)
         if longest_list:

@@ -21,11 +21,11 @@ class ShapeEnv:
         self.car: Car = None
         self.rays = []
         self.rule: Rule = None
-
-        plt.ion()
-        self.fig, self.ax = plt.subplots(1, 1)
-        self.fig.canvas.draw()
-        plt.show(block=False)
+        self.image_path = ""
+        self.fig, self.ax = plt.subplots()
+        self.background_axis = self.fig.add_axes(self.ax.get_position(), frameon=False)
+        # self.fig.canvas.draw()
+        # plt.show(block=False)
 
     def set_track_environment(self, img_processor: ImageProcessor):
         """
@@ -37,7 +37,7 @@ class ShapeEnv:
         Returns:
         None. The method sets up the track environment by calling other methods within the ShapeEnv class.
         """
-
+        self.image_path = img_processor.get_image_path()
         segments = img_processor.find_contour_segments()
         outer = img_processor.find_segment_points(segments[0])
         inner = img_processor.find_segment_points(segments[1])
@@ -315,18 +315,43 @@ class ShapeEnv:
             unstopping_ray = LineString([(car_point.x, car_point.y), (x, y)])
             self.rays.append(self.get_stopped_ray(unstopping_ray, car_point))
 
-    def plot_polygon(self, shapes: list, show=True, save=False):
-        geos = gpd.GeoSeries(shapes)
+    def plot_shapely_objs(self, shapely_objs: list, show=True, save=False):
+        geos = gpd.GeoSeries(shapely_objs)
         df = gpd.GeoDataFrame({"geometry": geos})
-        df.plot(ax=self.ax)
-        plt.pause(0.0001)
+        df.plot(ax=self.ax, color="red")
+        plt.pause(0.001)
 
         if save:
             current_time = time.time()
             plt.save(f"figure_{current_time}.png")
 
+    def update_game_frame(self, shapely_objs: list, save=False):
+        self.ax.clear()
+        self.ax.set_xlim(0, self.width)
+        self.ax.set_ylim(0, self.height)
+        self.plot_shapely_objs(shapely_objs, save=save)
+
+    def plot_polygon2(self, polygons):
+        for polygon in polygons.geoms:
+            x, y = polygon.exterior.xy
+            self.ax.plot(x, y)
+            plt.pause(0.001)
+
+    def draw_car(self):
+        self.ax.scatter([self.car.get_car_x()], [self.car.get_car_y()], color="red")
+        plt.pause(0.0001)
+
     def game_end(self) -> bool:
         return self.inverse_track.contains(self.car.get_shapely_point())
+
+    def draw_background(self, save=False):
+        self.background_axis.set_xlim(0, self.width)
+        self.background_axis.set_ylim(0, self.height)
+        geos = gpd.GeoSeries([game_env.inverse_track])
+        df = gpd.GeoDataFrame({"geometry": geos})
+        df.plot(ax=self.background_axis, color="black")
+        if save:
+            plt.savefig(f"processed_{self.image_path}.png")
 
     def start_game_keyboard(self, show=True):
         running = True
@@ -334,30 +359,33 @@ class ShapeEnv:
             on_press=self.on_press,
         )
         listener.start()
-        self.update_rays()
         if show:
-            game_env.plot_polygon([game_env.inverse_track] + [car.get_shapely_point()])
-
+            self.draw_background()
         while running:  # print
             self.update_rays()
             self.car.update_car_position()
-            game_env.plot_polygon([car.get_shapely_point()])
+            self.update_game_frame([car.get_shapely_point()] + self.rays)
             running = not self.game_end()
 
     def on_press(self, key):
         if key == keyboard.Key.up:
             self.car.accelerate()
+            print("up")
         if key == keyboard.Key.down:
             self.car.decelerate()
+            print("down")
         if key == keyboard.Key.left:
             self.car.turn_left()
+            print("left")
         if key == keyboard.Key.right:
             self.car.turn_right()
+            print("right")
 
 
 if __name__ == "__main__":
     width = 800
     height = 600
+    plt.ion()
 
     # object creation
     img_processor = ImageProcessor("map1.png", resize=[width, height])
@@ -368,4 +396,5 @@ if __name__ == "__main__":
     game_env.set_track_environment(img_processor)
     game_env.set_car(car)
     game_env.set_rule(RuleKeyboard(game_env.car))
+
     game_env.start_game_keyboard(show=True)
