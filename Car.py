@@ -35,6 +35,13 @@ class Car:
     def set_car_y(self, car_y: float) -> None:
         self.car_y = car_y
 
+    def set_car_coords(self, car_x: float, car_y: float) -> None:
+        self.car_x = car_x
+        self.car_y = car_y
+
+    def get_car_coords(self) -> tuple[float, float]:
+        return self.car_x, self.car_y
+
     def get_car_speed(self) -> float:
         return self.car_speed
 

@@ -1,11 +1,13 @@
 from shapely.geometry import Polygon, LineString, Point
 import geopandas as gpd
+from pynput import keyboard
 import matplotlib.pyplot as plt
+import math
+
+import time
+
 from ImageProcessor import ImageProcessor
 from Car import Car
-from Rule import RuleKeyboard, Rule
-import time
-from pynput import keyboard
 
 
 class ShapeEnv:
@@ -15,6 +17,7 @@ class ShapeEnv:
         height: int = 600,
         show_game: bool = True,
         save_processed_track: bool = True,
+        auto_config_car_start: bool = True,
     ) -> None:
         self.width: int = width
         self.height: int = height
@@ -28,6 +31,7 @@ class ShapeEnv:
         self.rays: list[LineString] = []
         self.image_path: str = ""
         self.save_processed_track = save_processed_track
+        self.auto_config_car_start = auto_config_car_start
 
         self.show_game: bool = show_game
         if show_game:
@@ -524,6 +528,8 @@ class ShapeEnv:
         None
         """
         running = True
+        if self.auto_config_car_start:
+            self.config_car_start()
         listener = keyboard.Listener(
             on_press=self.keyboard_rule,
         )
@@ -559,6 +565,63 @@ class ShapeEnv:
         if key == keyboard.Key.right:
             self.car.turn_right()
 
+    def calculate_line_angle(self, p1: Point, p2: Point) -> float:
+        """
+        Calculates the angle between two points in a 2D plane.
+
+        Parameters:
+        p1 (Point): The first point.
+        p2 (Point): The second point.
+
+        Returns:
+        float: The angle between the two points in degrees [0, 360).
+        """
+        return math.degrees(
+            math.atan2(
+                (p1.y - p2.y),
+                (p1.x - p2.x),
+            )
+        )
+
+    def calculate_car_start_angle(self):
+        """
+        Calculates the initial angle for the car at the start position.
+
+        The start position is the centroid of the first track segment.
+        The angle of the car is that of the line connecting the centroids of the first two track segments.
+
+        Parameters:
+        None
+
+        Returns:
+        float: The initial angle for the car in degrees [0, 360).
+        """
+        return self.calculate_line_angle(
+            self.segmented_track_in_order[0].centroid,
+            self.segmented_track_in_order[1].centroid,
+        )
+
+    def config_car_start(self):
+        """
+        Configures the initial position and angle of the car.
+
+        The car's initial position is set to the centroid of the first track segment.
+        The car's initial angle is set to the angle of the line connecting the centroids of the first two track segments.
+
+        Parameters:
+        None
+
+        Returns:
+        None
+
+        Note:
+        This method is called when the auto_config_car_start flag is set to True during the game initialization.
+        It sets the car's position and angle based on the processed track image.
+        """
+        start_point = self.segmented_track_in_order[0].centroid
+        self.car.set_car_coords(start_point.x, start_point.y)
+        self.car.set_car_angle(self.calculate_car_start_angle())
+
 
 if __name__ == "__main__":
     width = 800
@@ -567,7 +630,13 @@ if __name__ == "__main__":
     # object creation
     img_processor = ImageProcessor("map1.png", resize=[width, height])
     car = Car(650, 100, 0, 90)
-    game_env = ShapeEnv(width, height, show_game=True, save_processed_track=True)
+    game_env = ShapeEnv(
+        width,
+        height,
+        show_game=True,
+        save_processed_track=True,
+        auto_config_car_start=True,
+    )
 
     # environment setup
     game_env.set_track_environment(img_processor)
