@@ -561,6 +561,7 @@ class ShapeEnv:
         """
         self.car.set_car_speed(0)
         self.config_car_start()
+        self.update_rays()
 
     def keyboard_rule(self, key):
         """
