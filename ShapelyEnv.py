@@ -9,23 +9,45 @@ from pynput import keyboard
 
 
 class ShapeEnv:
-    def __init__(self, width: int = 800, height: int = 600) -> None:
-        self.width = width
-        self.height = height
+    def __init__(
+        self,
+        width: int = 800,
+        height: int = 600,
+        show_game: bool = True,
+        save_processed_track: bool = True,
+    ) -> None:
+        self.width: int = width
+        self.height: int = height
         self.background = Polygon([(0, 0), (0, height), (width, height), (width, 0)])
-        self.walls = [[], []]
-        self.reward_lines = []
+        self.walls: list[list[LineString]] = [[], []]
+        self.reward_lines: list[LineString] = []
         self.track: Polygon = None
         self.inverse_track: Polygon = None
-        self.segmented_track_in_order = []
+        self.segmented_track_in_order: list[Polygon] = []
         self.car: Car = None
-        self.rays = []
-        self.rule: Rule = None
-        self.image_path = ""
-        self.fig, self.ax = plt.subplots()
-        self.background_axis = self.fig.add_axes(self.ax.get_position(), frameon=False)
-        # self.fig.canvas.draw()
-        # plt.show(block=False)
+        self.rays: list[LineString] = []
+        self.image_path: str = ""
+        self.save_processed_track = save_processed_track
+
+        self.show_game: bool = show_game
+        if show_game:
+            # turn on interactive mode
+            plt.ion()
+
+            self.fig, self.ax = plt.subplots()
+            self.fig.set_figheight(self.height / 70)
+            self.fig.set_figwidth(self.width / 70)
+            # add a non-updating background axis to plot the track
+            self.background_axis = self.fig.add_axes(
+                self.ax.get_position(), frameon=False
+            )
+
+            self.ax.set_xlim(0, self.width)
+            self.ax.set_ylim(0, self.height)
+            self.background_axis.set_xlim(0, self.width)
+            self.background_axis.set_ylim(0, self.height)
+            self.background_axis.xaxis.set_visible(False)
+            self.background_axis.yaxis.set_visible(False)
 
     def set_track_environment(self, img_processor: ImageProcessor):
         """
@@ -36,6 +58,7 @@ class ShapeEnv:
 
         Returns:
         None. The method sets up the track environment by calling other methods within the ShapeEnv class.
+        It will set the track, segmented tracks and inverse track.
         """
         self.image_path = img_processor.get_image_path()
         segments = img_processor.find_contour_segments()
@@ -48,17 +71,43 @@ class ShapeEnv:
         game_env.segment_track()
 
     def set_car(self, car: Car):
+        """
+        Set the car object for the game environment.
+
+        Parameters:
+        car (Car): The car object to be set for the game environment.
+
+        Returns:
+        None
+        """
         self.car = car
 
-    def set_rule(self, rule: Rule):
-        self.rule = rule
-
     def set_track_from_segment_points(self, outer, inner):
+        """
+        Set the track polygon by subtracting the inner polygon from the outer polygon.
+
+        Parameters:
+        outer (list of tuples): A list of tuples representing the outer polygon's vertices.
+        inner (list of tuples): A list of tuples representing the inner polygon's vertices.
+
+        Returns:
+        None. The track polygon is updated in the 'self.track' attribute.
+        """
         outer_polygon = Polygon(outer)
         inner_poly = Polygon(inner)
         self.track = outer_polygon.difference(inner_poly)
 
     def set_walls(self, list_of_walls: list[list[list[float, float]]]):
+        """
+        This function sets the walls in the game environment.
+
+        Parameters:
+        list_of_walls (list[list[list[float, float]]]): A list of walls. Each wall is a line represented as a list of four coordinates.
+        list of walls should be in the format of [out_walls, inner_walls], order is irrelevant
+
+        Returns:
+        None
+        """
         for i, walls in enumerate(list_of_walls):
             for wall in walls:
                 self.walls[i].append(
@@ -66,6 +115,15 @@ class ShapeEnv:
                 )
 
     def get_walls(self, flat=False):
+        """
+        Returns the walls of the game environment.
+
+        Parameters:
+        flat (bool, default=False): If True, returns all walls in a flat list. If False, returns walls in a list of lists.
+
+        Returns:
+        list: A list of walls. If flat is True, the list contains all walls. If flat is False, the list contains walls in two lists: self.walls[0] and self.walls[1].
+        """
         if flat:
             return [wall for wall in self.walls[0] + self.walls[1]]
         return self.walls
@@ -73,6 +131,17 @@ class ShapeEnv:
     def set_reward_lines_from_walls(
         self,
     ) -> None:
+        """
+        This method calculates the reward lines from the walls.
+        Reward lines are the lines connecting the centroids(midpoints) of two walls.
+        These lines are used to segment the track into ordered blocks, to guide the car to navigate through the track .
+
+        Parameters:
+        None: Need to set walls before calling this method
+
+        Returns:
+        None: This method does not return any value. It updates the reward_lines attribute of the ShapeEnv instance.
+        """
         wall1s = self.walls[0]
         wall2s = self.walls[1]
         assigned_wall2s = []
@@ -104,10 +173,25 @@ class ShapeEnv:
         self.inverse_track = self.background.difference(self.track)
 
     def segment_track(self):
+        """
+        This method segments the track into smaller blocks based on the reward lines.
+        Each block is represented as a Shapely Polygon.
+
+        Parameters:
+        None: This method does not require any parameters. It uses the reward lines and the track
+              stored in the ShapeEnv instance.
+
+        Returns:
+        None: This method does not return any value. It updates the segmented_track_in_order attribute
+              of the ShapeEnv instance with the segmented track blocks.
+
+        """
         buffer_size = 1e-6
         reward_lines_size = len(self.reward_lines)
         step = 2
         for i in range(0, reward_lines_size, step):
+            # use two lines to segment the track into two polygons: a block and track.difference(block),
+            # the block is the smaller polygon
             segmented_track = sorted(
                 self.track.difference(self.reward_lines[i].buffer(buffer_size))
                 .difference(
@@ -162,12 +246,13 @@ class ShapeEnv:
         This method calculates the stopped ray from the unstopping ray.
 
         Parameters:
-        unstopping_ray (LineString): The unstopping ray from the car to a boundary point.
+        unstopping_ray (LineString): The unstopping "ray" starting from the car to a boundary point.
         car_point (Point): The current position of the car.
 
         Returns:
         LineString: The stopped ray, which is a segment that is the part of the unstopping ray
-                    that originates from the car and stopped at the first contact with the track's border.
+                    that originates from the car and stopped at the first contact with the track's border,
+                    simulating a sensor on the car to detect nearby obstacles.
         """
 
         intersections = self.track.intersection(unstopping_ray)
@@ -230,23 +315,26 @@ class ShapeEnv:
 
     # only 9 nine rays no matter the situation
     def update_rays(self):
+        """
+        Updates the rays based on the car's angle and position.
+
+        The rays are calculated based on the car's position and angle, and are used to detect obstacles.
+        The car's angle can be in any of the eight sections:
+            [22.5, 67.5), [67.5, 112.5), [112.5, 157.5), [157.5, 202.5), [202.5, 247.5), [247.5, 292.5), [292.5, 337.5), [337.5, 360) & [0, 22.5).
+        There are nines rays, each having to a specific angle, covering about 180 degrees of the car's front view.
+
+        Parameters:
+        None: uses the car's position and angle, to first get unstopping rays then compute the stopped rays.
+
+        Returns:
+        None: it will wipe out the old rays and add new ones based on the car's current position and angle.
+        """
         angle = self.car.get_car_angle()
         car_point = self.car.get_shapely_point()
         self.rays = []
         unstopping_ray_endpoints = set()
         # [22.5, 67.5)
         if angle % 360 >= 90 / 4 * 1 and angle % 360 < 90 / 4 * 3:
-            """
-            quadrant_i = self.get_unstopping_ray_endpoints_by_quadrant(
-                car_point.x, car_point.y, True, True
-            )
-            quadrant_ii = self.get_unstopping_ray_endpoints_by_quadrant(
-                car_point.x, car_point.y, True, False
-            )
-            quadrant_iv = self.get_unstopping_ray_endpoints_by_quadrant(
-                car_point.x, car_point.y, False, True
-            )
-            """
             quadrant_i, quadrant_ii, quadrant_iv = (
                 self.get_unstopping_ray_endpoints_by_quadrants(car_point, [0, 1, 3])
             )
@@ -315,10 +403,28 @@ class ShapeEnv:
             unstopping_ray = LineString([(car_point.x, car_point.y), (x, y)])
             self.rays.append(self.get_stopped_ray(unstopping_ray, car_point))
 
-    def plot_shapely_objs(self, shapely_objs: list, show=True, save=False):
+    def plot_shapely_objs(
+        self, shapely_objs: list, ax=None, color="red", save: bool = False
+    ):
+        """
+        Plots a list of Shapely objects on a Matplotlib axis.
+
+        Parameters:
+        shapely_objs (list): A list of Shapely objects to be plotted.
+        ax (Matplotlib Axes, optional): The Matplotlib axis on which to plot the objects. If not provided, a new axis will be created.
+        color (str, optional, default = "red"): The color of the plotted objects. Default is "red".
+        save (bool, optional, default: False): A flag indicating whether to save the plotted figure. Default is False.
+
+        Returns:
+        None
+        """
         geos = gpd.GeoSeries(shapely_objs)
         df = gpd.GeoDataFrame({"geometry": geos})
-        df.plot(ax=self.ax, color="red")
+        if ax:
+            df.plot(ax=ax, color=color)
+
+        else:
+            df.plot(color=color)
         plt.pause(0.001)
 
         if save:
@@ -326,75 +432,146 @@ class ShapeEnv:
             plt.save(f"figure_{current_time}.png")
 
     def update_game_frame(self, shapely_objs: list, save=False):
+        """
+        Updates the game frame by clearing the current axis, setting the x and y limits as the game width and height,
+        and plotting the updated car and rays.
+
+        Parameters:
+        shapely_objs (list): A list of Shapely objects to be plotted, in this case is the car and the rays.
+        save (bool, optional): A flag indicating whether to save the plotted figure. Default is False.
+
+        Returns:
+        None
+        """
         self.ax.clear()
         self.ax.set_xlim(0, self.width)
         self.ax.set_ylim(0, self.height)
-        self.plot_shapely_objs(shapely_objs, save=save)
-
-    def plot_polygon2(self, polygons):
-        for polygon in polygons.geoms:
-            x, y = polygon.exterior.xy
-            self.ax.plot(x, y)
-            plt.pause(0.001)
+        self.plot_shapely_objs(shapely_objs, ax=self.ax, save=save)
 
     def draw_car(self):
+        """
+        Draws the car on the game environment.
+
+        The car is represented as a red point on the game environment.
+        The position of the car is determined by the car's current x and y coordinates.
+
+        Parameters:
+        None
+
+        Returns:
+        None
+
+        Note:
+        This method uses Matplotlib's scatter function to draw the car on the game environment.
+        The scatter function plots a single point on the axis, which represents the car.
+        The color of the point is set to 'red' to distinguish it from other elements in the game environment.
+        The pause function is used to ensure that the drawing is visible for a short duration in interactive mode.
+        """
         self.ax.scatter([self.car.get_car_x()], [self.car.get_car_y()], color="red")
         plt.pause(0.0001)
 
     def game_end(self) -> bool:
+        """
+        Checks if the game has ended.
+
+        The game ends when the car collides with the track.
+        This is determined by checking if the car's position is within the inverse track polygon.
+
+        Parameters:
+        None
+
+        Returns:
+        bool: True if the game has ended (car collided with the track), False otherwise.
+        """
         return self.inverse_track.contains(self.car.get_shapely_point())
 
-    def draw_background(self, save=False):
-        self.background_axis.set_xlim(0, self.width)
-        self.background_axis.set_ylim(0, self.height)
+    def draw_background(self):
+        """
+        Draws the background of the game environment.
+
+        The background is represented as a black polygon on the game environment.
+        The polygon is created from the inverse of the track, which is obtained from the processed track image.
+
+        Parameters:
+        None
+
+        Returns:
+        None: It shows the inverse track as a black polygon, leaving the white space as the track
+
+        Note:
+        This method uses the GeoPandas library to create a GeoDataFrame from the inverse track polygon.
+        The GeoDataFrame is then plotted on the background axis using the Matplotlib library.
+        If the save_processed_track flag is set to True, the processed track image is saved as a PNG file.
+        """
+
         geos = gpd.GeoSeries([game_env.inverse_track])
         df = gpd.GeoDataFrame({"geometry": geos})
         df.plot(ax=self.background_axis, color="black")
-        if save:
-            plt.savefig(f"processed_{self.image_path}.png")
+        if self.save_processed_track:
+            plt.savefig(f"processed_{self.image_path.split('.')[0]}.png")
 
-    def start_game_keyboard(self, show=True):
+    def start_game(self):
+        """
+        Starts the game loop.
+
+        The game loop continuously updates the car's position, rays, and checks for game end conditions.
+        If the game end condition is met (car collides with the track), the game ends.
+
+        Parameters:
+        None
+
+        Returns:
+        None
+        """
         running = True
         listener = keyboard.Listener(
-            on_press=self.on_press,
+            on_press=self.keyboard_rule,
         )
         listener.start()
-        if show:
+        if self.show_game:
             self.draw_background()
         while running:  # print
             self.update_rays()
             self.car.update_car_position()
-            self.update_game_frame([car.get_shapely_point()] + self.rays)
+            if self.show_game:
+                self.update_game_frame([car.get_shapely_point()] + self.rays)
             running = not self.game_end()
 
-    def on_press(self, key):
+    def keyboard_rule(self, key):
+        """
+        Handles keyboard inputs and performs corresponding actions on the car.
+
+        Parameters:
+        key (keyboard.Key): The key that was pressed on the keyboard.
+
+        Returns:
+        None: The function updates the self.car's position, angle and speed
+        """
         if key == keyboard.Key.up:
             self.car.accelerate()
-            print("up")
+
         if key == keyboard.Key.down:
             self.car.decelerate()
-            print("down")
+
         if key == keyboard.Key.left:
             self.car.turn_left()
-            print("left")
+
         if key == keyboard.Key.right:
             self.car.turn_right()
-            print("right")
 
 
 if __name__ == "__main__":
     width = 800
     height = 600
-    plt.ion()
 
     # object creation
     img_processor = ImageProcessor("map1.png", resize=[width, height])
-    game_env = ShapeEnv(width, height)
     car = Car(650, 100, 0, 90)
+    game_env = ShapeEnv(width, height, show_game=True, save_processed_track=True)
 
     # environment setup
     game_env.set_track_environment(img_processor)
     game_env.set_car(car)
-    game_env.set_rule(RuleKeyboard(game_env.car))
 
-    game_env.start_game_keyboard(show=True)
+    # start game
+    game_env.start_game()
