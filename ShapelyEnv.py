@@ -543,6 +543,25 @@ class ShapeEnv:
                 self.update_game_frame([car.get_shapely_point()] + self.rays)
             running = not self.game_end()
 
+    def reset(self):
+        """
+        Resets the car's speed and position according to the auto configuration rules.
+
+        This method sets the car's speed to 0 and calls the `config_car_start` method to set the car's position and angle.
+        The car's position and angle are determined based on the processed track image.
+
+        Parameters:
+        None
+
+        Returns:
+        None: It resets the car's speed, position and angle.
+
+        Note:
+        This method is called when the game needs to be reset, such as when the user presses the space bar (or when the game ends).
+        """
+        self.car.set_car_speed(0)
+        self.config_car_start()
+
     def keyboard_rule(self, key):
         """
         Handles keyboard inputs and performs corresponding actions on the car.
@@ -564,6 +583,9 @@ class ShapeEnv:
 
         if key == keyboard.Key.right:
             self.car.turn_right()
+
+        if key == keyboard.Key.space:
+            self.reset()
 
     def calculate_line_angle(self, p1: Point, p2: Point) -> float:
         """
@@ -612,7 +634,7 @@ class ShapeEnv:
         None
 
         Returns:
-        None
+        None: It will set car position and angle according to pre-define rules.
 
         Note:
         This method is called when the auto_config_car_start flag is set to True during the game initialization.
