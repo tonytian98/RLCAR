@@ -13,8 +13,10 @@ from Car import Car
 class ShapeEnv:
     def __init__(
         self,
-        width: int = 800,
-        height: int = 600,
+        width: int,
+        height: int,
+        img_processor: ImageProcessor,
+        car: Car,
         show_game: bool = True,
         save_processed_track: bool = True,
         auto_config_car_start: bool = True,
@@ -32,6 +34,14 @@ class ShapeEnv:
         self.image_path: str = ""
         self.save_processed_track = save_processed_track
         self.auto_config_car_start = auto_config_car_start
+
+        self.set_track_environment(img_processor)
+        self.set_car(car)
+
+        if self.auto_config_car_start:
+            self.config_car_start()
+
+        self.update_rays()
 
         self.show_game: bool = show_game
         if show_game:
@@ -68,11 +78,11 @@ class ShapeEnv:
         segments = img_processor.find_contour_segments()
         outer = img_processor.find_segment_points(segments[0])
         inner = img_processor.find_segment_points(segments[1])
-        game_env.set_track_from_segment_points(outer, inner)
-        game_env.set_walls(segments)
-        game_env.set_reward_lines_from_walls()
-        game_env.set_inverse_track()
-        game_env.segment_track()
+        self.set_track_from_segment_points(outer, inner)
+        self.set_walls(segments)
+        self.set_reward_lines_from_walls()
+        self.set_inverse_track()
+        self.segment_track()
 
     def set_car(self, car: Car):
         """
@@ -317,6 +327,18 @@ class ShapeEnv:
             )
         return result
 
+    def get_rays(self) -> list[LineString]:
+        """
+        Returns the rays that simulate the sensor on the car to detect nearby obstacles.
+
+        Returns:
+            list[LineString]
+        """
+        return self.rays
+
+    def get_ray_lengths(self) -> list[float]:
+        return [ray.length for ray in self.rays]
+
     # only 9 nine rays no matter the situation
     def update_rays(self):
         """
@@ -408,7 +430,12 @@ class ShapeEnv:
             self.rays.append(self.get_stopped_ray(unstopping_ray, car_point))
 
     def plot_shapely_objs(
-        self, shapely_objs: list, ax=None, color="red", save: bool = False
+        self,
+        shapely_objs: list,
+        ax=None,
+        pause_in_sec: float = 0.0001,
+        color="red",
+        save: bool = False,
     ):
         """
         Plots a list of Shapely objects on a Matplotlib axis.
@@ -416,6 +443,7 @@ class ShapeEnv:
         Parameters:
         shapely_objs (list): A list of Shapely objects to be plotted.
         ax (Matplotlib Axes, optional): The Matplotlib axis on which to plot the objects. If not provided, a new axis will be created.
+        pause_in_sex (float, optional, default = 0.0001): The time in seconds the plot stays on the screen.
         color (str, optional, default = "red"): The color of the plotted objects. Default is "red".
         save (bool, optional, default: False): A flag indicating whether to save the plotted figure. Default is False.
 
@@ -429,7 +457,7 @@ class ShapeEnv:
 
         else:
             df.plot(color=color)
-        plt.pause(0.001)
+        plt.pause(pause_in_sec)
 
         if save:
             current_time = time.time()
@@ -508,7 +536,7 @@ class ShapeEnv:
         If the save_processed_track flag is set to True, the processed track image is saved as a PNG file.
         """
 
-        geos = gpd.GeoSeries([game_env.inverse_track])
+        geos = gpd.GeoSeries([self.inverse_track])
         df = gpd.GeoDataFrame({"geometry": geos})
         df.plot(ax=self.background_axis, color="black")
         if self.save_processed_track:
@@ -528,8 +556,7 @@ class ShapeEnv:
         None
         """
         running = True
-        if self.auto_config_car_start:
-            self.config_car_start()
+
         listener = keyboard.Listener(
             on_press=self.keyboard_rule,
         )
@@ -537,8 +564,8 @@ class ShapeEnv:
         if self.show_game:
             self.draw_background()
         while running:  # print
-            self.update_rays()
             self.car.update_car_position()
+            self.update_rays()
             if self.show_game:
                 self.update_game_frame([car.get_shapely_point()] + self.rays)
             running = not self.game_end()
@@ -590,7 +617,8 @@ class ShapeEnv:
 
     def calculate_line_angle(self, p1: Point, p2: Point) -> float:
         """
-        Calculates the angle between two points in a 2D plane.
+        Calculates the angle [0,360) between two points in a 2D plane,
+        the originating point is p1, the first argument
 
         Parameters:
         p1 (Point): The first point.
@@ -599,11 +627,14 @@ class ShapeEnv:
         Returns:
         float: The angle between the two points in degrees [0, 360).
         """
-        return math.degrees(
-            math.atan2(
-                (p1.y - p2.y),
-                (p1.x - p2.x),
+        return (
+            math.degrees(
+                math.atan2(
+                    (p2.y - p1.y),
+                    (p2.x - p1.x),
+                )
             )
+            % 360
         )
 
     def calculate_car_start_angle(self):
@@ -624,7 +655,7 @@ class ShapeEnv:
             self.segmented_track_in_order[1].centroid,
         )
 
-    def config_car_start(self):
+    def config_car_start(self, angle_adjustment: float = 0.0) -> None:
         """
         Configures the initial position and angle of the car.
 
@@ -632,7 +663,7 @@ class ShapeEnv:
         The car's initial angle is set to the angle of the line connecting the centroids of the first two track segments.
 
         Parameters:
-        None
+        angle_adjustment (float, optional): Increment car's initial angle by angle_adjustment. Default is 0.0.
 
         Returns:
         None: It will set car position and angle according to pre-define rules.
@@ -643,7 +674,7 @@ class ShapeEnv:
         """
         start_point = self.segmented_track_in_order[0].centroid
         self.car.set_car_coords(start_point.x, start_point.y)
-        self.car.set_car_angle(self.calculate_car_start_angle())
+        self.car.set_car_angle(self.calculate_car_start_angle() + angle_adjustment)
 
 
 if __name__ == "__main__":
@@ -656,14 +687,12 @@ if __name__ == "__main__":
     game_env = ShapeEnv(
         width,
         height,
+        img_processor,
+        car,
         show_game=True,
         save_processed_track=True,
         auto_config_car_start=True,
     )
-
-    # environment setup
-    game_env.set_track_environment(img_processor)
-    game_env.set_car(car)
 
     # start game
     game_env.start_game()

@@ -121,22 +121,49 @@ class RLEnv(ShapeEnv):
         height: int = 600,
         show_game: bool = True,
         save_processed_track: bool = True,
-        auto_config_car_start: bool = True,
     ):
+        """
+        Initialize a new instance of RLEnv.
+
+        Parameters:
+        device (str): The device to run the model on. It can be either 'cuda:0' or 'cpu'.
+        action_space (ActionSpace): The action space object that defines the available actions.
+        hidden_sizes (list[int]): A list of integers representing the sizes of the output of the hidden layers.
+        width (int, optional): The width of the game environment. Defaults to 800.
+        height (int, optional): The height of the game environment. Defaults to 600.
+        show_game (bool, optional): A flag indicating whether to show the game environment. Defaults to True.
+        save_processed_track (bool, optional): A flag indicating whether to save the processed track. Defaults to True.
+
+
+        Returns:
+        None: It initializes the RLEnv instance.
+        """
         super().__init__(
             self,
             width,
             height,
             show_game,
             save_processed_track,
-            auto_config_car_start,
+            auto_config_car_start=True,
         )
         self.device: str = device
         self.action_space: ActionSpace = action_space
-        self.hidden_sizes: list[int] = hidden_sizes
+        self.hidden_sizes: list[int] = (
+            hidden_sizes  # sizes of the output of the hidden layers
+        )
+
         self.state_size = len(self.get_state())
 
         self.model = DQN(len(self.get_state_size()), hidden_sizes, self.action_space.n)
+
+        # Because auto_config_car_start is hard coded to be True, the car's initial position is always the centroid of the first track segment.
+        self.current_segmented_track_index = 0
+
+    def get_difference_car_angle_target_angle(self):
+        return self.car.get_car_angle() - self.calculate_line_angle(
+            self.car.get_shapely_point(),
+            self.segmented_track_in_order[self.current_segmented_track_index + 1],
+        )
 
     def get_state(self):
         pass

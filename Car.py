@@ -49,7 +49,7 @@ class Car:
         self.car_speed = car_speed
 
     def get_car_angle(self) -> float:
-        return self.car_angle
+        return self.car_angle % 360
 
     def set_car_angle(self, car_angle: float) -> None:
         self.car_angle = car_angle
@@ -79,9 +79,33 @@ class Car:
         self.turn_angle = turn_angle
 
     def turn_right(self) -> None:
+        """
+        Turns the car to the right by decrementing its angle by the turn angle.
+
+        Parameters:
+        - None
+
+        Returns:
+        - None: This method does not return any value.
+
+        The method updates the car's angle by subtracting the turn angle.
+        This allows the car to change its direction to the right.
+        """
         self.car_angle -= self.turn_angle
 
     def turn_left(self) -> None:
+        """
+        Turns the car to the left by incrementing its angle by the turn angle.
+
+        Parameters:
+        - None
+
+        Returns:
+        - None: This method does not return any value.
+
+        The method updates the car's angle by adding the turn angle.
+        This allows the car to change its direction to the left.
+        """
         self.car_angle += self.turn_angle
 
     def accelerate(self) -> None:
