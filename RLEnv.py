@@ -4,6 +4,7 @@ from Car import Car
 from ImageProcessor import ImageProcessor
 from torch import nn
 import numpy as np
+from RecordEnv import RecordEnv
 
 
 class ActionSpace:
@@ -88,7 +89,7 @@ class DQN(nn.Module):
         return self.net
 
 
-class RLEnv(ShapelyEnv):
+class RLEnv(RecordEnv):
     def __init__(
         self,
         device: str,

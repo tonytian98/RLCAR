@@ -279,7 +279,7 @@ class ShapelyEnv:
             if intersection.intersects(car_point):
                 return intersection
 
-    def get_unstopping_ray_endpoints_by_quadrants(
+    def depreciated_get_unstopping_ray_endpoints_by_quadrants(
         self, car_point: Point, quadrant_indices: list[int]
     ) -> list[list[tuple[float, float]]]:
         """
@@ -339,9 +339,29 @@ class ShapelyEnv:
     def get_ray_lengths(self) -> list[float]:
         return [ray.length for ray in self.rays]
 
+    def get_unstopping_ray_endpoints_on_boundary(self, angle):
+        if angle == 90:
+            x = self.car.get_car_x()
+            y = self.height
+        elif angle == 270:
+            x = self.car.get_car_x()
+            y = 0
+        elif angle < 90 or angle > 270:
+            x = self.width
+            y = self.car.get_car_y() + self.car.get_car_x() * math.tan(
+                math.radians(angle)
+            )
+        else:
+            x = 0
+            y = self.car.get_car_y() - self.car.get_car_x() * math.tan(
+                math.radians(angle)
+            )
+        return x, y
+
     # only 9 nine rays no matter the situation
-    def update_rays(self):
+    def depreciated_update_rays(self):
         """
+        Depreciated.
         Updates the rays based on the car's angle and position.
 
         The rays are calculated based on the car's position and angle, and are used to detect obstacles.
@@ -362,7 +382,9 @@ class ShapelyEnv:
         # [22.5, 67.5)
         if angle % 360 >= 90 / 4 * 1 and angle % 360 < 90 / 4 * 3:
             quadrant_i, quadrant_ii, quadrant_iv = (
-                self.get_unstopping_ray_endpoints_by_quadrants(car_point, [0, 1, 3])
+                self.depreciated_get_unstopping_ray_endpoints_by_quadrants(
+                    car_point, [0, 1, 3]
+                )
             )
             left_boundary, left_mid = quadrant_ii[0], quadrant_ii[-1]
             right_boundary, right_mid = quadrant_iv[0], quadrant_iv[3]
@@ -371,14 +393,18 @@ class ShapelyEnv:
             )
         # [67.5, 112.5)
         elif angle % 360 >= 90 / 4 * 3 and angle % 360 < 90 / 4 * 5:
-            quadrant_i, quadrant_ii = self.get_unstopping_ray_endpoints_by_quadrants(
-                car_point, [0, 1]
+            quadrant_i, quadrant_ii = (
+                self.depreciated_get_unstopping_ray_endpoints_by_quadrants(
+                    car_point, [0, 1]
+                )
             )
             unstopping_ray_endpoints.update(set(quadrant_i + quadrant_ii))
         # [112.5, 157.5)
         elif angle % 360 >= 90 / 4 * 5 and angle % 360 < 90 / 4 * 7:
             quadrant_i, quadrant_ii, quadrant_iii = (
-                self.get_unstopping_ray_endpoints_by_quadrants(car_point, [0, 1, 2])
+                self.depreciated_get_unstopping_ray_endpoints_by_quadrants(
+                    car_point, [0, 1, 2]
+                )
             )
             left_boundary, left_mid = quadrant_iii[0], quadrant_iii[3]
             right_boundary, right_mid = quadrant_i[0], quadrant_i[-1]
@@ -387,14 +413,18 @@ class ShapelyEnv:
             )
         # [157.5, 202.5)
         elif angle % 360 >= 90 / 4 * 7 and angle % 360 < 90 / 4 * 9:
-            quadrant_ii, quadrant_iii = self.get_unstopping_ray_endpoints_by_quadrants(
-                car_point, [1, 2]
+            quadrant_ii, quadrant_iii = (
+                self.depreciated_get_unstopping_ray_endpoints_by_quadrants(
+                    car_point, [1, 2]
+                )
             )
             unstopping_ray_endpoints.update(set(quadrant_ii + quadrant_iii))
         # [202.5, 247.5)
         elif angle % 360 >= 90 / 4 * 9 and angle % 360 < 90 / 4 * 11:
             quadrant_ii, quadrant_iii, quadrant_iv = (
-                self.get_unstopping_ray_endpoints_by_quadrants(car_point, [1, 2, 3])
+                self.depreciated_get_unstopping_ray_endpoints_by_quadrants(
+                    car_point, [1, 2, 3]
+                )
             )
             left_boundary, left_mid = quadrant_ii[0], quadrant_ii[3]
             right_boundary, right_mid = quadrant_iv[0], quadrant_iv[-1]
@@ -404,14 +434,18 @@ class ShapelyEnv:
 
         # [247.5, 292.5)
         elif angle % 360 >= 90 / 4 * 11 and angle % 360 < 90 / 4 * 13:
-            quadrant_iii, quadrant_iv = self.get_unstopping_ray_endpoints_by_quadrants(
-                car_point, [2, 3]
+            quadrant_iii, quadrant_iv = (
+                self.depreciated_get_unstopping_ray_endpoints_by_quadrants(
+                    car_point, [2, 3]
+                )
             )
             unstopping_ray_endpoints.update(set(quadrant_iii + quadrant_iv))
         # [292.5, 337.5)
         elif angle % 360 >= 90 / 4 * 13 and angle % 360 < 90 / 4 * 15:
             quadrant_i, quadrant_iii, quadrant_iv = (
-                self.get_unstopping_ray_endpoints_by_quadrants(car_point, [0, 2, 3])
+                self.depreciated_get_unstopping_ray_endpoints_by_quadrants(
+                    car_point, [0, 2, 3]
+                )
             )
             left_boundary, left_mid = quadrant_iii[0], quadrant_iii[-1]
             right_boundary, right_mid = quadrant_i[0], quadrant_i[3]
@@ -420,14 +454,39 @@ class ShapelyEnv:
             )
         # [337.5, 360) & [0, 22.5)
         elif angle % 360 >= 90 / 4 * 15 or angle % 360 < 90 / 4 * 1:
-            quadrant_i, quadrant_iv = self.get_unstopping_ray_endpoints_by_quadrants(
-                car_point, [0, 3]
+            quadrant_i, quadrant_iv = (
+                self.depreciated_get_unstopping_ray_endpoints_by_quadrants(
+                    car_point, [0, 3]
+                )
             )
             unstopping_ray_endpoints.update(set(quadrant_i + quadrant_iv))
 
         for x, y in unstopping_ray_endpoints:
             unstopping_ray = LineString([(car_point.x, car_point.y), (x, y)])
             self.rays.append(self.get_stopped_ray(unstopping_ray, car_point))
+
+    def update_rays(self, total_number_of_rays: int = 7):
+        if total_number_of_rays % 2 == 0:
+            raise ValueError(
+                "Total number of rays must be odd, because it has a center ray, and it is symmetrical."
+            )
+        self.rays = []
+
+        car_angle = self.car.get_car_angle()
+        car_point = self.car.get_shapely_point()
+
+        number_of_rays_on_one_side = total_number_of_rays // 2
+        for j in [-1, 1]:
+            for i in range(1, number_of_rays_on_one_side + 1):
+                angle = (car_angle + j * i * 90 / number_of_rays_on_one_side) % 360
+                x, y = self.get_unstopping_ray_endpoints_on_boundary(angle)
+                unstopping_ray = LineString([(car_point.x, car_point.y), (x, y)])
+                print(unstopping_ray)
+                self.rays.append(self.get_stopped_ray(unstopping_ray, car_point))
+
+        front_x, front_y = self.get_unstopping_ray_endpoints_on_boundary(car_angle)
+        unstopping_ray = LineString([(car_point.x, car_point.y), (front_x, front_y)])
+        self.rays.append(self.get_stopped_ray(unstopping_ray, car_point))
 
     def plot_shapely_objs(
         self,
@@ -698,3 +757,5 @@ if __name__ == "__main__":
 
     # start game
     game_env.start_game()
+    # game_env.update_rays()
+#

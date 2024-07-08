@@ -1,5 +1,3 @@
-from Car import Car
-from ImageProcessor import ImageProcessor
 from ShapelyEnv import ShapelyEnv
 from datetime import datetime
 from time import sleep
@@ -154,6 +152,16 @@ class Record:
 
 class RecordEnv(ShapelyEnv):
     def __init__(self, *args, **kwargs):
+        """
+        Initialize a RecordEnv object.
+
+        Parameters:
+        *args: Variable length argument list. Passed to ShapelyEnv.
+        **kwargs: Arbitrary keyword arguments. Passed to ShapelyEnv.
+
+        Additional Attributes:
+        action_record (Record): An instance of the Record class, used to record actions.
+        """
         super().__init__(*args, **kwargs)
 
         self.action_record = Record("actions")
@@ -190,16 +198,14 @@ class RecordEnv(ShapelyEnv):
 
     def start_game_with_record(self):
         """
-        Starts the game loop.
+        Starts the game loop with record.
+
+        Note: Record does not support continuous keyboard input (holding a key down).
+        It will register continuous input of the same key to be only one press,
+        because it is designed for RL models, whose action is always discrete.
 
         The game loop continuously updates the car's position, rays, and checks for game end conditions.
         If the game end condition is met (car collides with the track), the game ends.
-
-        Parameters:
-        None
-
-        Returns:
-        None
         """
         running = True
 
@@ -209,7 +215,6 @@ class RecordEnv(ShapelyEnv):
         listener.start()
         if self.show_game:
             self.draw_background()
-        counter: int = 0
         while running:
             if self.action_record.get_current_value() is None:
                 self.action_record.set_current_value("NO_ACTION")
@@ -219,9 +224,6 @@ class RecordEnv(ShapelyEnv):
             if self.show_game:
                 self.update_game_frame([self.car.get_shapely_point()] + self.rays)
             running = not self.game_end()
-
-            counter += 1
-            print(f"Counter: {counter}")
         listener.stop()
 
         self.action_record.save_record_to_txt()
@@ -249,16 +251,21 @@ class RecordEnv(ShapelyEnv):
             self.update_rays()
             if self.show_game:
                 self.update_game_frame([self.car.get_shapely_point()] + self.rays)
+            # Normal exit condition
             if self.game_end() and i == len(actions) - 1:
-                print("Replay ended.")
                 break
+            # Game ended before all actions are replayed
             if game_env.game_end() and i != len(actions) - 1:
                 raise ValueError("Game ended early.")
+            # Game did not end after all actions are replayed
             if not game_env.game_end() and i == len(actions) - 1:
                 raise ValueError("Game did not end after all actions. It should.")
 
 
 if __name__ == "__main__":
+    from Car import Car
+    from ImageProcessor import ImageProcessor
+
     width = 800
     height = 600
 
@@ -277,7 +284,9 @@ if __name__ == "__main__":
 
     # start game
     game_env.start_game_with_record()
+    # reset game
     game_env.reset()
     sleep(2)
+    # replay game
     game_env.action_record.load_latest_record()
     game_env.replay()
