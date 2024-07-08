@@ -1,3 +1,4 @@
+from threading import Thread
 from shapely.geometry import Polygon, LineString, Point
 import geopandas as gpd
 from pynput import keyboard
@@ -8,6 +9,7 @@ import time
 
 from ImageProcessor import ImageProcessor
 from Car import Car
+from multiprocessing import Process
 
 
 class ShapelyEnv:
@@ -348,7 +350,7 @@ class ShapelyEnv:
             y = 0
         elif angle < 90 or angle > 270:
             x = self.width
-            y = self.car.get_car_y() + self.car.get_car_x() * math.tan(
+            y = self.car.get_car_y() + (self.width - self.car.get_car_x()) * math.tan(
                 math.radians(angle)
             )
         else:
@@ -465,7 +467,16 @@ class ShapelyEnv:
             unstopping_ray = LineString([(car_point.x, car_point.y), (x, y)])
             self.rays.append(self.get_stopped_ray(unstopping_ray, car_point))
 
-    def update_rays(self, total_number_of_rays: int = 7):
+    def update_side_rays(self, car_point, angle):
+        x, y = self.get_unstopping_ray_endpoints_on_boundary(angle)
+        unstopping_ray = LineString([(car_point.x, car_point.y), (x, y)])
+        self.rays.append(self.get_stopped_ray(unstopping_ray, car_point))
+
+    def _join_threads(self, l: list) -> None:
+        for t in l:
+            t.join()
+
+    def update_rays(self, total_number_of_rays: int = 9):
         if total_number_of_rays % 2 == 0:
             raise ValueError(
                 "Total number of rays must be odd, because it has a center ray, and it is symmetrical."
@@ -476,17 +487,81 @@ class ShapelyEnv:
         car_point = self.car.get_shapely_point()
 
         number_of_rays_on_one_side = total_number_of_rays // 2
+        print("start")
+        print(car_angle)
         for j in [-1, 1]:
             for i in range(1, number_of_rays_on_one_side + 1):
                 angle = (car_angle + j * i * 90 / number_of_rays_on_one_side) % 360
-                x, y = self.get_unstopping_ray_endpoints_on_boundary(angle)
-                unstopping_ray = LineString([(car_point.x, car_point.y), (x, y)])
-                print(unstopping_ray)
-                self.rays.append(self.get_stopped_ray(unstopping_ray, car_point))
+                print(angle)
+                self.update_side_rays(car_point, angle)
 
+        self.update_side_rays(car_point, car_angle)
+        print("end")
+
+    def multiP_update_rays(self, total_number_of_rays: int = 7):
+        start_time = time.time()
+        if total_number_of_rays % 2 == 0:
+            raise ValueError(
+                "Total number of rays must be odd, because it has a center ray, and it is symmetrical."
+            )
+        self.rays = []
+
+        car_angle = self.car.get_car_angle()
+        car_point = self.car.get_shapely_point()
+
+        number_of_rays_on_one_side = total_number_of_rays // 2
+        processes = []
+        for j in [-1, 1]:
+            for i in range(1, number_of_rays_on_one_side + 1):
+                angle = (car_angle + j * i * 90 / number_of_rays_on_one_side) % 360
+                t = Process(target=self.update_side_rays, args=(car_point, angle))
+                t.start()
+                processes.append(t)
+
+        self._join_threads(processes)
+
+        # the center ray is always at index -1
         front_x, front_y = self.get_unstopping_ray_endpoints_on_boundary(car_angle)
         unstopping_ray = LineString([(car_point.x, car_point.y), (front_x, front_y)])
         self.rays.append(self.get_stopped_ray(unstopping_ray, car_point))
+
+        end_time = time.time()
+        execution_time = end_time - start_time
+
+        print(f"Execution time: {execution_time} seconds")
+
+    def multiT_update_rays(self, total_number_of_rays: int = 7):
+        start_time = time.time()
+        if total_number_of_rays % 2 == 0:
+            raise ValueError(
+                "Total number of rays must be odd, because it has a center ray, and it is symmetrical."
+            )
+        self.rays = []
+
+        car_angle = self.car.get_car_angle()
+        car_point = self.car.get_shapely_point()
+
+        number_of_rays_on_one_side = total_number_of_rays // 2
+
+        threads = []
+        for j in [-1, 1]:
+            for i in range(1, number_of_rays_on_one_side + 1):
+                angle = (car_angle + j * i * 90 / number_of_rays_on_one_side) % 360
+                t = Thread(target=self.update_side_rays, args=(car_point, angle))
+                t.start()
+                threads.append(t)
+
+        self._join_threads(threads)
+
+        # the center ray is always at index -1
+        front_x, front_y = self.get_unstopping_ray_endpoints_on_boundary(car_angle)
+        unstopping_ray = LineString([(car_point.x, car_point.y), (front_x, front_y)])
+        self.rays.append(self.get_stopped_ray(unstopping_ray, car_point))
+
+        end_time = time.time()
+        execution_time = end_time - start_time
+
+        print(f"Execution time: {execution_time} seconds")
 
     def plot_shapely_objs(
         self,

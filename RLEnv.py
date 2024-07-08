@@ -179,6 +179,9 @@ class RLEnv(RecordEnv):
     def normalize(self, value, min_val, max_val):
         return (value - min_val) / (max_val - min_val)
 
+    def standardize(self, value, mean, std):
+        return (value - mean) / std
+
     def get_state(self):
         return [self.get_difference_car_angle_target_angle()] + self.get_ray_lengths()
 
