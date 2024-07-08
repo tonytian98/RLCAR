@@ -487,16 +487,13 @@ class ShapelyEnv:
         car_point = self.car.get_shapely_point()
 
         number_of_rays_on_one_side = total_number_of_rays // 2
-        print("start")
-        print(car_angle)
+
         for j in [-1, 1]:
             for i in range(1, number_of_rays_on_one_side + 1):
                 angle = (car_angle + j * i * 90 / number_of_rays_on_one_side) % 360
-                print(angle)
                 self.update_side_rays(car_point, angle)
 
         self.update_side_rays(car_point, car_angle)
-        print("end")
 
     def multiP_update_rays(self, total_number_of_rays: int = 7):
         start_time = time.time()
@@ -567,7 +564,7 @@ class ShapelyEnv:
         self,
         shapely_objs: list,
         ax=None,
-        pause_in_sec: float = 0.0001,
+        pause_in_sec: float = 0.000001,
         color="red",
         save: bool = False,
     ):
