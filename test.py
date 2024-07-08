@@ -11,3 +11,6 @@ print(
     )
     % 360
 )
+
+l = [f + "ddd" for f in []]
+print(l)

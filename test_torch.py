@@ -1,6 +1,6 @@
 from Car import Car
 from ImageProcessor import ImageProcessor
-from ShapelyEnv import ShapeEnv
+from ShapelyEnv import ShapelyEnv
 import numpy as np
 import copy
 from collections import deque
@@ -111,7 +111,7 @@ class RLDataset(IterableDataset):
             yield experience
 
 
-class RLEnv(ShapeEnv):
+class RLEnv(ShapelyEnv):
     def __init__(
         self,
         device: str,
@@ -354,7 +354,7 @@ if __name__ == "__main__":
     # object creation
     img_processor = ImageProcessor("map1.png", resize=[width, height])
     car = Car(650, 100, 0, 90)
-    game_env = ShapeEnv(
+    game_env = ShapelyEnv(
         width,
         height,
         show_game=True,

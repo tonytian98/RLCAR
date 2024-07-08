@@ -10,7 +10,7 @@ from ImageProcessor import ImageProcessor
 from Car import Car
 
 
-class ShapeEnv:
+class ShapelyEnv:
     def __init__(
         self,
         width: int,
@@ -542,37 +542,9 @@ class ShapeEnv:
         if self.save_processed_track:
             plt.savefig(f"processed_{self.image_path.split('.')[0]}.png")
 
-    def start_game(self):
-        """
-        Starts the game loop.
-
-        The game loop continuously updates the car's position, rays, and checks for game end conditions.
-        If the game end condition is met (car collides with the track), the game ends.
-
-        Parameters:
-        None
-
-        Returns:
-        None
-        """
-        running = True
-
-        listener = keyboard.Listener(
-            on_press=self.keyboard_rule,
-        )
-        listener.start()
-        if self.show_game:
-            self.draw_background()
-        while running:  # print
-            self.car.update_car_position()
-            self.update_rays()
-            if self.show_game:
-                self.update_game_frame([car.get_shapely_point()] + self.rays)
-            running = not self.game_end()
-
     def reset(self):
         """
-        Resets the car's speed and position according to the auto configuration rules.
+        Resets the car's speed, rays, position and angle according to the auto configuration rules.
 
         This method sets the car's speed to 0 and calls the `config_car_start` method to set the car's position and angle.
         The car's position and angle are determined based on the processed track image.
@@ -581,7 +553,7 @@ class ShapeEnv:
         None
 
         Returns:
-        None: It resets the car's speed, position and angle.
+        None: It resets the car's speed, rays, position and angle.
 
         Note:
         This method is called when the game needs to be reset, such as when the user presses the space bar (or when the game ends).
@@ -676,6 +648,36 @@ class ShapeEnv:
         self.car.set_car_coords(start_point.x, start_point.y)
         self.car.set_car_angle(self.calculate_car_start_angle() + angle_adjustment)
 
+    def start_game(self):
+        """
+        Starts the game loop.
+
+        The game loop continuously updates the car's position, rays, and checks for game end conditions.
+        If the game end condition is met (car collides with the track), the game ends.
+
+        Parameters:
+        None
+
+        Returns:
+        None
+        """
+        running = True
+
+        listener = keyboard.Listener(
+            on_press=self.keyboard_rule,
+        )
+        listener.start()
+        if self.show_game:
+            self.draw_background()
+        while running:
+            self.car.update_car_position()
+            self.update_rays()
+            if self.show_game:
+                self.update_game_frame([self.car.get_shapely_point()] + self.rays)
+            running = not self.game_end()
+
+        listener.stop()
+
 
 if __name__ == "__main__":
     width = 800
@@ -684,7 +686,7 @@ if __name__ == "__main__":
     # object creation
     img_processor = ImageProcessor("map1.png", resize=[width, height])
     car = Car(650, 100, 0, 90)
-    game_env = ShapeEnv(
+    game_env = ShapelyEnv(
         width,
         height,
         img_processor,
