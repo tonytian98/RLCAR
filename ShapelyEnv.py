@@ -221,6 +221,9 @@ class ShapelyEnv:
 
             self.segmented_track_in_order.append(segmented_track)
 
+    def get_number_of_segmented_tracks(self):
+        return len(self.segmented_track_in_order)
+
     def get_unstopping_ray_endpoints_by_quadrant(
         self, car_x, car_y, up: bool, right: bool
     ) -> list[tuple[float, float]]:
@@ -339,6 +342,12 @@ class ShapelyEnv:
         return self.rays
 
     def get_ray_lengths(self) -> list[float]:
+        """
+        Returns length of each ray in self.rays
+
+        Returns: list[float]
+            [ray.length for ray in self.rays]
+        """
         return [ray.length for ray in self.rays]
 
     def get_unstopping_ray_endpoints_on_boundary(self, angle):
@@ -778,6 +787,42 @@ class ShapelyEnv:
         start_point = self.segmented_track_in_order[0].centroid
         self.car.set_car_coords(start_point.x, start_point.y)
         self.car.set_car_angle(self.calculate_car_start_angle() + angle_adjustment)
+
+    def get_car_distance_to_segmented_track(self, index) -> float:
+        """
+        Calculates the distance between the car and a specific segment of the track.
+
+        The distance is calculated as the difference between the car's shape and the shape of the track segment.
+        The negative value of this method can be used as part of the reward in RL Models
+
+        Parameters:
+        index (int): The index of the track segment to calculate the distance to.
+
+        Returns:
+        float: The distance between the car and the specified track segment.
+        """
+        return self.car.get_shapely_point().distance(
+            self.segmented_track_in_order[index]
+        )
+
+    def get_current_segmented_track_index(self) -> int:
+        """
+        Determines the index of the segmented track that the car is currently in.
+
+        The function iterates over each segmented track in the order they were created.
+        It checks if the car's current position is within the boundaries of the current segmented track.
+        If the car's position is within the boundaries of a segmented track, the function returns the index of that segmented track.
+
+        Parameters:
+        None
+
+        Returns:
+        int: The index of the segmented track that the car is currently in.
+        """
+        for i, seg_track in enumerate(self.segmented_track_in_order):
+            if seg_track.contains(self.car.get_shapely_point()):
+                return i
+        return None
 
     def start_game(self):
         """
