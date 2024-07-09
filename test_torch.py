@@ -1,79 +1,19 @@
 from Car import Car
 from ImageProcessor import ImageProcessor
-from ShapelyEnv import ShapelyEnv
 import numpy as np
 import copy
 from collections import deque
 import random
+from RLEnv import RLEnv, ActionSpace
+from DQN import DQN
 
 import torch
-from torch import nn
 import torch.nn.functional as F
 from torch.optim import AdamW
 from torch.utils.data.dataset import IterableDataset
 from torch.utils.data import DataLoader
 from pytorch_lightning import LightningModule, Trainer
 from pytorch_lightning.callbacks import EarlyStopping
-
-
-class ActionSpace:
-    def __init__(self, descriptive_actions: list[str]):
-        """
-        Initialize the ActionSpace object with descriptive actions.
-
-        Parameters:
-        descriptive_actions (list[str]): A list of strings representing the descriptive actions.
-
-        Returns:
-        None: It will generate the action space in the form of [0, 1, ..., len(descriptive actions)].
-        """
-        self.descriptive_actions = descriptive_actions
-        self.actions = [i for i in range(len(descriptive_actions))]
-        self.n = len(self.actions)
-
-    def descriptive_actions_mapping(self, i):
-        return self.descriptive_actions[i]
-
-    def sample(self):
-        """
-        This function is used to sample an action from the action space, which is a list [0, 1, ...].
-
-        Parameters:
-        None
-
-        Returns:
-        int: A random action from the action space.
-        """
-        return self.actions[torch.randint(0, self.n, (1,)).item()]
-
-    def __len__(self):
-        return self.n
-
-    def __str__(self):
-        print([f"{i}: {self.descriptive_actions_mapping(i)}" for i in range(self.n)])
-
-
-class DQN(nn.Module):
-    def __init__(self, obs_size: int, hidden_sizes: list[int], n_actions: int):
-        super().__init__()
-        hidden_layers = []
-        if len(hidden_sizes) > 1:
-            for i in range(len(hidden_sizes) - 1):
-                hidden_layers.append(nn.Linear(hidden_sizes[i], hidden_sizes[i + 1]))
-                hidden_layers.append(nn.ReLU())
-
-        self.net = nn.Sequential(
-            nn.Linear(obs_size, hidden_sizes[0]),
-            nn.ReLU(),
-            *hidden_layers,
-            nn.Linear(hidden_sizes[-1], n_actions),
-        )
-
-    def forward(self, x):
-        return self.net(x.float())
-
-    def get_net(self):
-        return self.net
 
 
 class ReplayBuffer:
@@ -102,7 +42,7 @@ class ReplayBuffer:
 
 
 class RLDataset(IterableDataset):
-    def __init__(self, buffer, sample_size=400):
+    def __init__(self, buffer, sample_size=300):
         self.buffer = buffer
         self.sample_size = sample_size
 
@@ -111,119 +51,40 @@ class RLDataset(IterableDataset):
             yield experience
 
 
-class RLEnv(ShapelyEnv):
-    def __init__(
-        self,
-        device: str,
-        action_space: ActionSpace,
-        hidden_sizes: list[int],
-        width: int = 800,
-        height: int = 600,
-        show_game: bool = True,
-        save_processed_track: bool = True,
-    ):
-        """
-        Initialize a new instance of RLEnv.
-
-        Parameters:
-        device (str): The device to run the model on. It can be either 'cuda:0' or 'cpu'.
-        action_space (ActionSpace): The action space object that defines the available actions.
-        hidden_sizes (list[int]): A list of integers representing the sizes of the output of the hidden layers.
-        width (int, optional): The width of the game environment. Defaults to 800.
-        height (int, optional): The height of the game environment. Defaults to 600.
-        show_game (bool, optional): A flag indicating whether to show the game environment. Defaults to True.
-        save_processed_track (bool, optional): A flag indicating whether to save the processed track. Defaults to True.
-
-
-        Returns:
-        None: It initializes the RLEnv instance.
-        """
-        super().__init__(
-            self,
-            width,
-            height,
-            show_game,
-            save_processed_track,
-            auto_config_car_start=True,
-        )
-        self.device: str = device
-        self.action_space: ActionSpace = action_space
-        self.hidden_sizes: list[int] = (
-            hidden_sizes  # sizes of the output of the hidden layers
-        )
-
-        self.state_size = len(self.get_state())
-
-        self.model = DQN(len(self.get_state_size()), hidden_sizes, self.action_space.n)
-
-        # Because auto_config_car_start is hard coded to be True, the car's initial position is always the centroid of the first track segment.
-        self.current_segmented_track_index = 0
-
-    def get_difference_car_angle_target_angle(self):
-        return self.car.get_car_angle() - self.calculate_line_angle(
-            self.car.get_shapely_point(),
-            self.segmented_track_in_order[self.current_segmented_track_index + 1],
-        )
-
-    def get_state(self):
-        pass
-
-    def get_state_size(self):
-        return self.state_size
-
-    def step(self, action: int):
-        """excute the action in game env and return the new state, reward, terminated, (truncated, info)"""
-        pass
-
-    def record(
-        self, episode_trigger
-    ):  # episode_trigger is a lambda function to tell which episode to record
-        ###TO DO: record the episode's actions and rewards
-        pass
-
-    def epsilon_greedy(self, epsilon=0.0):
-        if np.random.random() < epsilon:
-            action = self.action_space.sample()
-        else:
-            state = torch.tensor([self.get_state()]).to(self.device)
-            q_values = self.model.get_net()(state)
-            _, action = torch.max(q_values, dim=1)
-            action = int(action.item())
-        return action
-
-
 class DeepQLearning(LightningModule):
     # Initialize.
     def __init__(
         self,
         env: RLEnv,  # game environment with an epsilon greedy policy
-        capacity=100,  # capacity of the replay buffer
-        batch_size=256,  # batch size for training
-        lr=1e-3,  # learning rate for optimizer
+        capacity: int = 10_000,  # capacity of the replay buffer
+        batch_size: int = 256,  # batch size for training
+        hidden_sizes: list[int] = [128],  # hidden sizes for the neural network
+        lr: float = 1e-3,  # learning rate for optimizer
         loss_fn=F.smooth_l1_loss,  # loss function
         optimizer=AdamW,  # optimizer that updates the model parameters
-        gamma=0.99,  # discount factor for accumulating rewards
-        eps_start=1.0,  # starting epsilon for epsilon greedy policy
-        eps_end=0.15,  # ending epsilon for epsilon greedy policy
-        eps_last_episode=100,  # number of episodes used to decay epsilon to eps_end
-        samples_per_epoch=1_000,  # number of samples needed per training episode
-        sync_rate=10,  # number of epochs before we update the policy network using the target network
+        gamma: float = 0.99,  # discount factor for accumulating rewards
+        eps_start: float = 1.0,  # starting epsilon for epsilon greedy policy
+        eps_end: float = 0.1,  # ending epsilon for epsilon greedy policy
+        eps_last_episode: int = 150,  # number of episodes used to decay epsilon to eps_end
+        samples_per_epoch: int = 5_000,  # number of samples needed per training episode
+        sync_rate: int = 10,  # number of epochs before we update the policy network using the target network
     ):
         """
         Initialize a new instance of DeepQLearning.
 
         Parameters:
         env (RLEnv): The game environment with an epsilon greedy policy.
-        capacity (int, optional): The capacity of the replay buffer. Defaults to 100.
+        capacity (int, optional): The capacity of the replay buffer. Defaults to 10,000.
         batch_size (int, optional): The batch size for training. Defaults to 256.
+        hidden_sizes (list[int], optional): The hidden sizes for the neural network. Defaults to [128].
         lr (float, optional): The learning rate for optimizer. Defaults to 1e-3.
         loss_fn (function, optional): The loss function. Defaults to F.smooth_l1_loss.
         optimizer (function, optional): The optimizer that updates the model parameters. Defaults to AdamW.
         gamma (float, optional): The discount factor for accumulating rewards. Defaults to 0.99.
         eps_start (float, optional): The starting epsilon for epsilon greedy policy. Defaults to 1.0.
-        eps_end (float, optional): The ending epsilon for epsilon greedy policy. Defaults to 0.15.
-        eps_last_episode (int, optional): The number of episodes used to decay epsilon to eps_end. Defaults to 100.
-        samples_per_epoch (int, optional): The number of samples needed per training episode. Defaults to 1_000.
+        eps_end (float, optional): The ending epsilon for epsilon greedy policy. Defaults to 0.1.
+        eps_last_episode (int, optional): The number of episodes used to decay epsilon to eps_end. Defaults to 150.
+        samples_per_epoch (int, optional): The number of samples needed per training episode. Defaults to 5_000.
         sync_rate (int, optional): The number of epochs before we update the policy network using the target network. Defaults to 10.
 
         Returns:
@@ -231,8 +92,9 @@ class DeepQLearning(LightningModule):
         """
         super().__init__()
         self.env = env
+        self.state_size = env.get_state_size()
         # policy network
-        self.q_net = self.env.model
+        self.q_net = DQN(self.state_size, hidden_sizes, env.action_space.n)
         # target network
         self.target_q_net = copy.deepcopy(self.q_net)
 
@@ -243,6 +105,31 @@ class DeepQLearning(LightningModule):
         while len(self.buffer) < samples_per_epoch:
             self.play_episode(epsilon=eps_start)
 
+        self.training_step_outputs = []
+
+    def epsilon_greedy(
+        self, epsilon=0.0, device="cuda:0" if torch.cuda.is_available() else "cpu"
+    ) -> int:
+        """
+        Returns an action based on the current state of the environment.
+
+        Args:
+            epsilon (float, optional): The probability of choosing a random action. Defaults to 0.0.
+
+        Returns:
+            int: The chosen action.
+
+        """
+        if np.random.random() < epsilon:
+            action = self.env.action_space.sample()
+        else:
+            state = torch.tensor([self.env.get_state()]).to(device)
+            q_values = self.q_net(state)
+            # action is the index of the max q value
+            _, action = torch.max(q_values, dim=1)
+            action = int(action.item())
+        return action
+
     @torch.no_grad()
     def play_episode(self, epsilon: float = 0.0) -> float:
         self.env.reset()
@@ -250,7 +137,7 @@ class DeepQLearning(LightningModule):
         game_over = False
         total_return = 0
         while not game_over:
-            action = self.env.epsilon_greedy(epsilon)
+            action = self.epsilon_greedy(epsilon)
             next_state, reward, game_over = self.env.step(action)
             experience = (state, action, reward, game_over, next_state)
             self.buffer.append(experience)
@@ -262,7 +149,7 @@ class DeepQLearning(LightningModule):
         return self.q_net(x)
 
     def configure_optimizers(self):
-        return [AdamW(self.q_net.parameters(), lr=self.hparams.lr)]
+        return [self.hparams.optimizer(self.q_net.parameters(), lr=self.hparams.lr)]
 
     def train_dataloader(self):
         """
@@ -283,7 +170,7 @@ class DeepQLearning(LightningModule):
         # yield list of randomly sampled experiences of length self.hparams.samples_per_epoch
 
         dataset = RLDataset(self.buffer, sample_size=self.hparams.samples_per_epoch)
-        return DataLoader(dataset, batach_size=self.hparams.batch_size)
+        return DataLoader(dataset, batch_size=self.hparams.batch_size, num_workers=19)
 
     def training_step(self, batch, batch_idx):
         """
@@ -312,7 +199,7 @@ class DeepQLearning(LightningModule):
         actions = actions.unsqueeze(1)
         rewards = rewards.unsqueeze(1)
         game_overs = game_overs.unsqueeze(1)
-
+        # Q-value (Action-Value): Represents the value of taking a specific action in a specific state.
         # Q-value (Action-Value): Represents the value of taking a specific action in a specific state.
 
         # It gets the value of the 'actions' that was taken in 'states' [ [q(ai,si)], [q(aj,sj)], ...  ]
@@ -322,9 +209,10 @@ class DeepQLearning(LightningModule):
         expected_state_action_value = rewards + self.hparams.gamma * next_action_value
         loss = self.hparams.loss_fn(state_action_value, expected_state_action_value)
         self.log("episode/Q-Error", loss)
+        self.training_step_outputs.append(loss)
         return loss
 
-    def training_epoch_end(self, training_step_outputs):
+    def on_train_epoch_end(self):
         """
         This function is called at the end of each training epoch.
         It updates the epsilon value for the epsilon-greedy policy,
@@ -345,21 +233,26 @@ class DeepQLearning(LightningModule):
         self.log("episode/Return", episode_return)
         if self.current_epoch % self.hparams.sync_rate == 0:
             self.target_q_net.load_state_dict(self.q_net.state_dict())
+        epoch_average = torch.stack(self.training_step_outputs).mean()
+        self.log("training_epoch_average", epoch_average)
+        self.training_step_outputs.clear()
 
 
 if __name__ == "__main__":
     width = 800
     height = 600
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    num_gpus = torch.cuda.device_count()
 
     # object creation
     img_processor = ImageProcessor("map1.png", resize=[width, height])
     car = Car(650, 100, 0, 90)
-    game_env = ShapelyEnv(
-        width,
-        height,
-        show_game=True,
+    game_env = RLEnv(
+        ActionSpace(["hold", "accelerate", "decelerate", "steer_left", "steer_right"]),
+        img_processor,
+        car,
+        show_game=False,
         save_processed_track=True,
-        auto_config_car_start=True,
     )
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     num_gpus = torch.cuda.device_count()
@@ -367,8 +260,7 @@ if __name__ == "__main__":
     algo = DeepQLearning(game_env)
 
     trainer = Trainer(
-        gpus=num_gpus,
-        max_epochs=10_000,
+        max_epochs=1000,
         callbacks=EarlyStopping(monitor="episode/Return", mode="max", patience=500),
     )
     trainer.fit(algo)

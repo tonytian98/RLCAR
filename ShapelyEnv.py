@@ -22,6 +22,7 @@ class ShapelyEnv:
         show_game: bool = True,
         save_processed_track: bool = True,
         auto_config_car_start: bool = True,
+        number_of_rays=9,
     ) -> None:
         self.width: int = width
         self.height: int = height
@@ -36,7 +37,7 @@ class ShapelyEnv:
         self.image_path: str = ""
         self.save_processed_track = save_processed_track
         self.auto_config_car_start = auto_config_car_start
-
+        self.number_of_rays = number_of_rays
         self.set_track_environment(img_processor)
         self.set_car(car)
 
@@ -348,7 +349,10 @@ class ShapelyEnv:
         Returns: list[float]
             [ray.length for ray in self.rays]
         """
-        return [ray.length for ray in self.rays]
+        if self.rays == []:
+            return [0 for i in range(self.number_of_rays)]
+
+        return [ray.length if ray is not None else 0 for ray in self.rays]
 
     def get_unstopping_ray_endpoints_on_boundary(self, angle):
         if angle == 90:
@@ -485,8 +489,8 @@ class ShapelyEnv:
         for t in l:
             t.join()
 
-    def update_rays(self, total_number_of_rays: int = 9):
-        if total_number_of_rays % 2 == 0:
+    def update_rays(self):
+        if self.number_of_rays % 2 == 0:
             raise ValueError(
                 "Total number of rays must be odd, because it has a center ray, and it is symmetrical."
             )
@@ -495,7 +499,7 @@ class ShapelyEnv:
         car_angle = self.car.get_car_angle()
         car_point = self.car.get_shapely_point()
 
-        number_of_rays_on_one_side = total_number_of_rays // 2
+        number_of_rays_on_one_side = self.number_of_rays // 2
 
         for j in [-1, 1]:
             for i in range(1, number_of_rays_on_one_side + 1):
@@ -504,7 +508,7 @@ class ShapelyEnv:
 
         self.update_side_rays(car_point, car_angle)
 
-    def multiP_update_rays(self, total_number_of_rays: int = 7):
+    def multiProcess_update_rays(self, total_number_of_rays: int = 7):
         start_time = time.time()
         if total_number_of_rays % 2 == 0:
             raise ValueError(
@@ -536,7 +540,7 @@ class ShapelyEnv:
 
         print(f"Execution time: {execution_time} seconds")
 
-    def multiT_update_rays(self, total_number_of_rays: int = 7):
+    def multiThread_update_rays(self, total_number_of_rays: int = 7):
         start_time = time.time()
         if total_number_of_rays % 2 == 0:
             raise ValueError(
