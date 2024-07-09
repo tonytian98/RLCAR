@@ -107,13 +107,13 @@ class RecordEnv(ShapelyEnv):
         if self.show_game:
             self.draw_background()
         for i, action in enumerate(actions):
-            if "UP" in action:
+            if "1" in action:
                 self.car.accelerate()
-            elif "DOWN" in action:
+            elif "2" in action:
                 self.car.decelerate()
-            elif "LEFT" in action:
+            elif "3" in action:
                 self.car.turn_left()
-            elif "RIGHT" in action:
+            elif "4" in action:
                 self.car.turn_right()
             elif "SPACE" in action:
                 self.reset()
@@ -143,20 +143,12 @@ if __name__ == "__main__":
     # object creation
     img_processor = ImageProcessor("map1.png", resize=[width, height])
     car = Car(650, 100, 0, 90)
-    game_env = RecordEnv(
-        width,
-        height,
-        img_processor,
-        car,
-        show_game=True,
-        save_processed_track=True,
-        auto_config_car_start=True,
-    )
+    game_env = RecordEnv(img_processor, car, show_game=True, save_processed_track=False)
 
     # start game
-    game_env.start_game_with_record()
+    # game_env.start_game_with_record()
     # reset game
-    game_env.reset()
+    # game_env.reset()
     sleep(2)
     # replay game
     game_env.action_record.load_latest_record()

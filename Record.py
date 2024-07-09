@@ -27,7 +27,7 @@ class Record:
         self.separator = separator
         self.record: list = []
         self.start_time: str = ""
-        self.past_record_files: list[str] = []
+        self.replay_records: list[str] = []
 
         self.set_time_in_file_name = set_time_in_file_name
 
@@ -117,9 +117,9 @@ class Record:
         Raises:
         ValueError: If the offset is out of range.
         """
-        if -offset < 1 - len(self.past_record_files) or offset < 0:
+        if -offset < 1 - len(self.replay_records) or offset < 0:
             raise ValueError("Offset is out of range")
-        file_name = self.past_record_files[-1 - offset]
+        file_name = self.replay_records[-1 - offset]
         self.set_replay_record_from_file(file_name)
 
     def get_replay_records(self):
