@@ -1,3 +1,4 @@
+from threading import Thread
 from shapely.geometry import Polygon, LineString, Point
 import geopandas as gpd
 from pynput import keyboard
@@ -8,16 +9,20 @@ import time
 
 from ImageProcessor import ImageProcessor
 from Car import Car
+from multiprocessing import Process
 
 
-class ShapeEnv:
+class ShapelyEnv:
     def __init__(
         self,
-        width: int = 800,
-        height: int = 600,
+        width: int,
+        height: int,
+        img_processor: ImageProcessor,
+        car: Car,
         show_game: bool = True,
         save_processed_track: bool = True,
         auto_config_car_start: bool = True,
+        number_of_rays=9,
     ) -> None:
         self.width: int = width
         self.height: int = height
@@ -32,6 +37,14 @@ class ShapeEnv:
         self.image_path: str = ""
         self.save_processed_track = save_processed_track
         self.auto_config_car_start = auto_config_car_start
+        self.number_of_rays = number_of_rays
+        self.set_track_environment(img_processor)
+        self.set_car(car)
+
+        if self.auto_config_car_start:
+            self.config_car_start()
+
+        self.update_rays()
 
         self.show_game: bool = show_game
         if show_game:
@@ -68,11 +81,11 @@ class ShapeEnv:
         segments = img_processor.find_contour_segments()
         outer = img_processor.find_segment_points(segments[0])
         inner = img_processor.find_segment_points(segments[1])
-        game_env.set_track_from_segment_points(outer, inner)
-        game_env.set_walls(segments)
-        game_env.set_reward_lines_from_walls()
-        game_env.set_inverse_track()
-        game_env.segment_track()
+        self.set_track_from_segment_points(outer, inner)
+        self.set_walls(segments)
+        self.set_reward_lines_from_walls()
+        self.set_inverse_track()
+        self.segment_track()
 
     def set_car(self, car: Car):
         """
@@ -190,7 +203,7 @@ class ShapeEnv:
               of the ShapeEnv instance with the segmented track blocks.
 
         """
-        buffer_size = 1e-6
+        buffer_size = 1e-5
         reward_lines_size = len(self.reward_lines)
         step = 2
         for i in range(0, reward_lines_size, step):
@@ -208,6 +221,9 @@ class ShapeEnv:
             )[0]
 
             self.segmented_track_in_order.append(segmented_track)
+
+    def get_number_of_segmented_tracks(self):
+        return len(self.segmented_track_in_order)
 
     def get_unstopping_ray_endpoints_by_quadrant(
         self, car_x, car_y, up: bool, right: bool
@@ -269,7 +285,7 @@ class ShapeEnv:
             if intersection.intersects(car_point):
                 return intersection
 
-    def get_unstopping_ray_endpoints_by_quadrants(
+    def depreciated_get_unstopping_ray_endpoints_by_quadrants(
         self, car_point: Point, quadrant_indices: list[int]
     ) -> list[list[tuple[float, float]]]:
         """
@@ -317,9 +333,50 @@ class ShapeEnv:
             )
         return result
 
-    # only 9 nine rays no matter the situation
-    def update_rays(self):
+    def get_rays(self) -> list[LineString]:
         """
+        Returns the rays that simulate the sensor on the car to detect nearby obstacles.
+
+        Returns:
+            list[LineString]
+        """
+        return self.rays
+
+    def get_ray_lengths(self) -> list[float]:
+        """
+        Returns length of each ray in self.rays
+
+        Returns: list[float]
+            [ray.length for ray in self.rays]
+        """
+        if self.rays == []:
+            return [0 for i in range(self.number_of_rays)]
+
+        return [ray.length if ray is not None else 0 for ray in self.rays]
+
+    def get_unstopping_ray_endpoints_on_boundary(self, angle):
+        if angle == 90:
+            x = self.car.get_car_x()
+            y = self.height
+        elif angle == 270:
+            x = self.car.get_car_x()
+            y = 0
+        elif angle < 90 or angle > 270:
+            x = self.width
+            y = self.car.get_car_y() + (self.width - self.car.get_car_x()) * math.tan(
+                math.radians(angle)
+            )
+        else:
+            x = 0
+            y = self.car.get_car_y() - self.car.get_car_x() * math.tan(
+                math.radians(angle)
+            )
+        return x, y
+
+    # only 9 nine rays no matter the situation
+    def depreciated_update_rays(self):
+        """
+        Depreciated.
         Updates the rays based on the car's angle and position.
 
         The rays are calculated based on the car's position and angle, and are used to detect obstacles.
@@ -340,7 +397,9 @@ class ShapeEnv:
         # [22.5, 67.5)
         if angle % 360 >= 90 / 4 * 1 and angle % 360 < 90 / 4 * 3:
             quadrant_i, quadrant_ii, quadrant_iv = (
-                self.get_unstopping_ray_endpoints_by_quadrants(car_point, [0, 1, 3])
+                self.depreciated_get_unstopping_ray_endpoints_by_quadrants(
+                    car_point, [0, 1, 3]
+                )
             )
             left_boundary, left_mid = quadrant_ii[0], quadrant_ii[-1]
             right_boundary, right_mid = quadrant_iv[0], quadrant_iv[3]
@@ -349,14 +408,18 @@ class ShapeEnv:
             )
         # [67.5, 112.5)
         elif angle % 360 >= 90 / 4 * 3 and angle % 360 < 90 / 4 * 5:
-            quadrant_i, quadrant_ii = self.get_unstopping_ray_endpoints_by_quadrants(
-                car_point, [0, 1]
+            quadrant_i, quadrant_ii = (
+                self.depreciated_get_unstopping_ray_endpoints_by_quadrants(
+                    car_point, [0, 1]
+                )
             )
             unstopping_ray_endpoints.update(set(quadrant_i + quadrant_ii))
         # [112.5, 157.5)
         elif angle % 360 >= 90 / 4 * 5 and angle % 360 < 90 / 4 * 7:
             quadrant_i, quadrant_ii, quadrant_iii = (
-                self.get_unstopping_ray_endpoints_by_quadrants(car_point, [0, 1, 2])
+                self.depreciated_get_unstopping_ray_endpoints_by_quadrants(
+                    car_point, [0, 1, 2]
+                )
             )
             left_boundary, left_mid = quadrant_iii[0], quadrant_iii[3]
             right_boundary, right_mid = quadrant_i[0], quadrant_i[-1]
@@ -365,14 +428,18 @@ class ShapeEnv:
             )
         # [157.5, 202.5)
         elif angle % 360 >= 90 / 4 * 7 and angle % 360 < 90 / 4 * 9:
-            quadrant_ii, quadrant_iii = self.get_unstopping_ray_endpoints_by_quadrants(
-                car_point, [1, 2]
+            quadrant_ii, quadrant_iii = (
+                self.depreciated_get_unstopping_ray_endpoints_by_quadrants(
+                    car_point, [1, 2]
+                )
             )
             unstopping_ray_endpoints.update(set(quadrant_ii + quadrant_iii))
         # [202.5, 247.5)
         elif angle % 360 >= 90 / 4 * 9 and angle % 360 < 90 / 4 * 11:
             quadrant_ii, quadrant_iii, quadrant_iv = (
-                self.get_unstopping_ray_endpoints_by_quadrants(car_point, [1, 2, 3])
+                self.depreciated_get_unstopping_ray_endpoints_by_quadrants(
+                    car_point, [1, 2, 3]
+                )
             )
             left_boundary, left_mid = quadrant_ii[0], quadrant_ii[3]
             right_boundary, right_mid = quadrant_iv[0], quadrant_iv[-1]
@@ -382,14 +449,18 @@ class ShapeEnv:
 
         # [247.5, 292.5)
         elif angle % 360 >= 90 / 4 * 11 and angle % 360 < 90 / 4 * 13:
-            quadrant_iii, quadrant_iv = self.get_unstopping_ray_endpoints_by_quadrants(
-                car_point, [2, 3]
+            quadrant_iii, quadrant_iv = (
+                self.depreciated_get_unstopping_ray_endpoints_by_quadrants(
+                    car_point, [2, 3]
+                )
             )
             unstopping_ray_endpoints.update(set(quadrant_iii + quadrant_iv))
         # [292.5, 337.5)
         elif angle % 360 >= 90 / 4 * 13 and angle % 360 < 90 / 4 * 15:
             quadrant_i, quadrant_iii, quadrant_iv = (
-                self.get_unstopping_ray_endpoints_by_quadrants(car_point, [0, 2, 3])
+                self.depreciated_get_unstopping_ray_endpoints_by_quadrants(
+                    car_point, [0, 2, 3]
+                )
             )
             left_boundary, left_mid = quadrant_iii[0], quadrant_iii[-1]
             right_boundary, right_mid = quadrant_i[0], quadrant_i[3]
@@ -398,8 +469,10 @@ class ShapeEnv:
             )
         # [337.5, 360) & [0, 22.5)
         elif angle % 360 >= 90 / 4 * 15 or angle % 360 < 90 / 4 * 1:
-            quadrant_i, quadrant_iv = self.get_unstopping_ray_endpoints_by_quadrants(
-                car_point, [0, 3]
+            quadrant_i, quadrant_iv = (
+                self.depreciated_get_unstopping_ray_endpoints_by_quadrants(
+                    car_point, [0, 3]
+                )
             )
             unstopping_ray_endpoints.update(set(quadrant_i + quadrant_iv))
 
@@ -407,8 +480,106 @@ class ShapeEnv:
             unstopping_ray = LineString([(car_point.x, car_point.y), (x, y)])
             self.rays.append(self.get_stopped_ray(unstopping_ray, car_point))
 
+    def update_side_rays(self, car_point, angle):
+        x, y = self.get_unstopping_ray_endpoints_on_boundary(angle)
+        unstopping_ray = LineString([(car_point.x, car_point.y), (x, y)])
+        self.rays.append(self.get_stopped_ray(unstopping_ray, car_point))
+
+    def _join_threads(self, threads: list) -> None:
+        for t in threads:
+            t.join()
+
+    def update_rays(self):
+        if self.number_of_rays % 2 == 0:
+            raise ValueError(
+                "Total number of rays must be odd, because it has a center ray, and it is symmetrical."
+            )
+        self.rays = []
+
+        car_angle = self.car.get_car_angle()
+        car_point = self.car.get_shapely_point()
+
+        number_of_rays_on_one_side = self.number_of_rays // 2
+
+        for j in [-1, 1]:
+            for i in range(1, number_of_rays_on_one_side + 1):
+                angle = (car_angle + j * i * 90 / number_of_rays_on_one_side) % 360
+                self.update_side_rays(car_point, angle)
+
+        self.update_side_rays(car_point, car_angle)
+
+    def multiProcess_update_rays(self, total_number_of_rays: int = 7):
+        start_time = time.time()
+        if total_number_of_rays % 2 == 0:
+            raise ValueError(
+                "Total number of rays must be odd, because it has a center ray, and it is symmetrical."
+            )
+        self.rays = []
+
+        car_angle = self.car.get_car_angle()
+        car_point = self.car.get_shapely_point()
+
+        number_of_rays_on_one_side = total_number_of_rays // 2
+        processes = []
+        for j in [-1, 1]:
+            for i in range(1, number_of_rays_on_one_side + 1):
+                angle = (car_angle + j * i * 90 / number_of_rays_on_one_side) % 360
+                t = Process(target=self.update_side_rays, args=(car_point, angle))
+                t.start()
+                processes.append(t)
+
+        self._join_threads(processes)
+
+        # the center ray is always at index -1
+        front_x, front_y = self.get_unstopping_ray_endpoints_on_boundary(car_angle)
+        unstopping_ray = LineString([(car_point.x, car_point.y), (front_x, front_y)])
+        self.rays.append(self.get_stopped_ray(unstopping_ray, car_point))
+
+        end_time = time.time()
+        execution_time = end_time - start_time
+
+        print(f"Execution time: {execution_time} seconds")
+
+    def multiThread_update_rays(self, total_number_of_rays: int = 7):
+        start_time = time.time()
+        if total_number_of_rays % 2 == 0:
+            raise ValueError(
+                "Total number of rays must be odd, because it has a center ray, and it is symmetrical."
+            )
+        self.rays = []
+
+        car_angle = self.car.get_car_angle()
+        car_point = self.car.get_shapely_point()
+
+        number_of_rays_on_one_side = total_number_of_rays // 2
+
+        threads = []
+        for j in [-1, 1]:
+            for i in range(1, number_of_rays_on_one_side + 1):
+                angle = (car_angle + j * i * 90 / number_of_rays_on_one_side) % 360
+                t = Thread(target=self.update_side_rays, args=(car_point, angle))
+                t.start()
+                threads.append(t)
+
+        self._join_threads(threads)
+
+        # the center ray is always at index -1
+        front_x, front_y = self.get_unstopping_ray_endpoints_on_boundary(car_angle)
+        unstopping_ray = LineString([(car_point.x, car_point.y), (front_x, front_y)])
+        self.rays.append(self.get_stopped_ray(unstopping_ray, car_point))
+
+        end_time = time.time()
+        execution_time = end_time - start_time
+
+        print(f"Execution time: {execution_time} seconds")
+
     def plot_shapely_objs(
-        self, shapely_objs: list, ax=None, color="red", save: bool = False
+        self,
+        shapely_objs: list,
+        ax=None,
+        pause_in_sec: float = 0.000001,
+        color="red",
+        save: bool = False,
     ):
         """
         Plots a list of Shapely objects on a Matplotlib axis.
@@ -416,6 +587,7 @@ class ShapeEnv:
         Parameters:
         shapely_objs (list): A list of Shapely objects to be plotted.
         ax (Matplotlib Axes, optional): The Matplotlib axis on which to plot the objects. If not provided, a new axis will be created.
+        pause_in_sex (float, optional, default = 0.0001): The time in seconds the plot stays on the screen.
         color (str, optional, default = "red"): The color of the plotted objects. Default is "red".
         save (bool, optional, default: False): A flag indicating whether to save the plotted figure. Default is False.
 
@@ -429,7 +601,7 @@ class ShapeEnv:
 
         else:
             df.plot(color=color)
-        plt.pause(0.001)
+        plt.pause(pause_in_sec)
 
         if save:
             current_time = time.time()
@@ -508,44 +680,15 @@ class ShapeEnv:
         If the save_processed_track flag is set to True, the processed track image is saved as a PNG file.
         """
 
-        geos = gpd.GeoSeries([game_env.inverse_track])
+        geos = gpd.GeoSeries([self.inverse_track])
         df = gpd.GeoDataFrame({"geometry": geos})
         df.plot(ax=self.background_axis, color="black")
         if self.save_processed_track:
             plt.savefig(f"processed_{self.image_path.split('.')[0]}.png")
 
-    def start_game(self):
-        """
-        Starts the game loop.
-
-        The game loop continuously updates the car's position, rays, and checks for game end conditions.
-        If the game end condition is met (car collides with the track), the game ends.
-
-        Parameters:
-        None
-
-        Returns:
-        None
-        """
-        running = True
-        if self.auto_config_car_start:
-            self.config_car_start()
-        listener = keyboard.Listener(
-            on_press=self.keyboard_rule,
-        )
-        listener.start()
-        if self.show_game:
-            self.draw_background()
-        while running:  # print
-            self.update_rays()
-            self.car.update_car_position()
-            if self.show_game:
-                self.update_game_frame([car.get_shapely_point()] + self.rays)
-            running = not self.game_end()
-
     def reset(self):
         """
-        Resets the car's speed and position according to the auto configuration rules.
+        Resets the car's speed, rays, position and angle according to the auto configuration rules.
 
         This method sets the car's speed to 0 and calls the `config_car_start` method to set the car's position and angle.
         The car's position and angle are determined based on the processed track image.
@@ -554,13 +697,14 @@ class ShapeEnv:
         None
 
         Returns:
-        None: It resets the car's speed, position and angle.
+        None: It resets the car's speed, rays, position and angle.
 
         Note:
         This method is called when the game needs to be reset, such as when the user presses the space bar (or when the game ends).
         """
         self.car.set_car_speed(0)
         self.config_car_start()
+        self.update_rays()
 
     def keyboard_rule(self, key):
         """
@@ -589,7 +733,8 @@ class ShapeEnv:
 
     def calculate_line_angle(self, p1: Point, p2: Point) -> float:
         """
-        Calculates the angle between two points in a 2D plane.
+        Calculates the angle [0,360) between two points in a 2D plane,
+        the originating point is p1, the first argument
 
         Parameters:
         p1 (Point): The first point.
@@ -598,11 +743,14 @@ class ShapeEnv:
         Returns:
         float: The angle between the two points in degrees [0, 360).
         """
-        return math.degrees(
-            math.atan2(
-                (p1.y - p2.y),
-                (p1.x - p2.x),
+        return (
+            math.degrees(
+                math.atan2(
+                    (p2.y - p1.y),
+                    (p2.x - p1.x),
+                )
             )
+            % 360
         )
 
     def calculate_car_start_angle(self):
@@ -610,7 +758,7 @@ class ShapeEnv:
         Calculates the initial angle for the car at the start position.
 
         The start position is the centroid of the first track segment.
-        The angle of the car is that of the line connecting the centroids of the first two track segments.
+        The angle of the car is that of the line connecting the centroids of the first two reward lines.
 
         Parameters:
         None
@@ -619,19 +767,19 @@ class ShapeEnv:
         float: The initial angle for the car in degrees [0, 360).
         """
         return self.calculate_line_angle(
-            self.segmented_track_in_order[0].centroid,
-            self.segmented_track_in_order[1].centroid,
+            self.reward_lines[0].centroid,
+            self.reward_lines[1].centroid,
         )
 
-    def config_car_start(self):
+    def config_car_start(self, angle_adjustment: float = 0.0) -> None:
         """
         Configures the initial position and angle of the car.
 
-        The car's initial position is set to the centroid of the first track segment.
-        The car's initial angle is set to the angle of the line connecting the centroids of the first two track segments.
+        The car's initial position is set to the centroid of the first track reward line.
+        The car's initial angle is set to the angle of the line connecting the centroids of the first two reward lines.
 
         Parameters:
-        None
+        angle_adjustment (float, optional): Increment car's initial angle by angle_adjustment. Default is 0.0.
 
         Returns:
         None: It will set car position and angle according to pre-define rules.
@@ -640,9 +788,75 @@ class ShapeEnv:
         This method is called when the auto_config_car_start flag is set to True during the game initialization.
         It sets the car's position and angle based on the processed track image.
         """
-        start_point = self.segmented_track_in_order[0].centroid
+        start_point = self.reward_lines[0].centroid
         self.car.set_car_coords(start_point.x, start_point.y)
-        self.car.set_car_angle(self.calculate_car_start_angle())
+        self.car.set_car_angle(self.calculate_car_start_angle() + angle_adjustment)
+
+    def get_car_distance_to_segmented_track(self, index) -> float:
+        """
+        Calculates the distance between the car and a specific segment of the track.
+
+        The distance is calculated as the difference between the car's shape and the shape of the track segment.
+        The negative value of this method can be used as part of the reward in RL Models
+
+        Parameters:
+        index (int): The index of the track segment to calculate the distance to.
+
+        Returns:
+        float: The distance between the car and the specified track segment.
+        """
+        return self.car.get_shapely_point().distance(
+            self.segmented_track_in_order[index]
+        )
+
+    def get_current_segmented_track_index(self) -> int:
+        """
+        Determines the index of the segmented track that the car is currently in.
+
+        The function iterates over each segmented track in the order they were created.
+        It checks if the car's current position is within the boundaries of the current segmented track.
+        If the car's position is within the boundaries of a segmented track, the function returns the index of that segmented track.
+
+        Parameters:
+        None
+
+        Returns:
+        int: The index of the segmented track that the car is currently in.
+        """
+        for i, seg_track in enumerate(self.segmented_track_in_order):
+            if seg_track.contains(self.car.get_shapely_point()):
+                return i
+        return None
+
+    def start_game(self):
+        """
+        Starts the game loop.
+
+        The game loop continuously updates the car's position, rays, and checks for game end conditions.
+        If the game end condition is met (car collides with the track), the game ends.
+
+        Parameters:
+        None
+
+        Returns:
+        None
+        """
+        running = True
+
+        listener = keyboard.Listener(
+            on_press=self.keyboard_rule,
+        )
+        listener.start()
+        if self.show_game:
+            self.draw_background()
+        while running:
+            self.car.update_car_position()
+            self.update_rays()
+            if self.show_game:
+                self.update_game_frame([self.car.get_shapely_point()] + self.rays)
+            running = not self.game_end()
+
+        listener.stop()
 
 
 if __name__ == "__main__":
@@ -650,19 +864,22 @@ if __name__ == "__main__":
     height = 600
 
     # object creation
-    img_processor = ImageProcessor("map1.png", resize=[width, height])
+    img_processor = ImageProcessor("map3.png", resize=[width, height])
     car = Car(650, 100, 0, 90)
-    game_env = ShapeEnv(
+    game_env = ShapelyEnv(
         width,
         height,
+        img_processor,
+        car,
         show_game=True,
         save_processed_track=True,
         auto_config_car_start=True,
     )
 
-    # environment setup
-    game_env.set_track_environment(img_processor)
-    game_env.set_car(car)
-
     # start game
+    print(len(game_env.segmented_track_in_order))
+    # game_env.plot_shapely_objs(game_env.segmented_track_in_order, color="black")
+    # time.sleep(5)
     game_env.start_game()
+    # game_env.update_rays()
+#
