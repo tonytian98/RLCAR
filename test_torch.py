@@ -6,7 +6,7 @@ from collections import deque
 import random
 from RLEnv import RLEnv, ActionSpace
 from DQN import DQN
-
+import os
 import torch
 import torch.nn.functional as F
 from torch.optim import AdamW
@@ -172,7 +172,19 @@ class DeepQLearning(LightningModule):
         # yield list of randomly sampled experiences of length self.hparams.samples_per_epoch
 
         dataset = RLDataset(self.buffer, sample_size=self.hparams.samples_per_epoch)
-        return DataLoader(dataset, batch_size=self.hparams.batch_size, num_workers=19)
+        max_num_worker_suggest = len(os.sched_getaffinity(0))
+        if max_num_worker_suggest is None:
+            if max_num_worker_suggest is None:
+            # os.cpu_count() could return Optional[int]
+            # get cpu count first and check None in order to satify mypy check
+                cpu_count = os.cpu_count()
+                if cpu_count is not None:
+                    max_num_worker_suggest = cpu_count
+        if max_num_worker_suggest:
+            num_workers = max_num_worker_suggest
+        else:
+            num_workers = 5
+        return DataLoader(dataset, batch_size=self.hparams.batch_size, num_workers=num_workers)
 
     def training_step(self, batch, batch_idx):
         """
@@ -243,18 +255,17 @@ class DeepQLearning(LightningModule):
 if __name__ == "__main__":
     width = 800
     height = 600
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
-    num_gpus = torch.cuda.device_count()
 
     # object creation
     img_processor = ImageProcessor("map1.png", resize=[width, height])
-    car = Car(650, 100, 0, 90)
+    car = Car(650, 100, 0, 90,max_forward_speed = 6)
     game_env = RLEnv(
         ActionSpace(["hold", "accelerate", "decelerate", "steer_left", "steer_right"]),
         img_processor,
         car,
         show_game=False,
         save_processed_track=True,
+        maximum_steps = 1000
     )
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     num_gpus = torch.cuda.device_count()
@@ -263,8 +274,8 @@ if __name__ == "__main__":
     algo = DeepQLearning(game_env)
 
     trainer = Trainer(
-        max_epochs=1000,
-        callbacks=EarlyStopping(monitor="episode/Return", mode="max", patience=500),
+        max_epochs=800,
+        callbacks=EarlyStopping(monitor="episode/Return", mode="max", patience=200),
     )
 
     start_time = time.time()

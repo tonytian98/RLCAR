@@ -16,7 +16,7 @@ class RLEnv(RecordEnv):
         height: int = 600,
         show_game: bool = False,
         save_processed_track: bool = True,
-        maximum_steps: int = 5000,
+        maximum_steps: int = 1000,
     ):
         """
         Initialize a new instance of RLEnv.
@@ -67,7 +67,7 @@ class RLEnv(RecordEnv):
         self.current_step = 0
 
         self.LIFE_REWARD = 0
-        self.GOAL_REWARD = 1
+        self.GOAL_REWARD = 2
         self.CRASH_REWARD = -2
         self.USELESS_ACTION_REWARD = -0.5
 
@@ -229,10 +229,10 @@ class RLEnv(RecordEnv):
 
         running = not self.game_end()
         if not running:
-            reward = self.CRASH_REWARD
+            reward += self.CRASH_REWARD
 
         elif self.reached_next_segment(new_state[0]):
-            reward = self.GOAL_REWARD
+            reward += self.GOAL_REWARD
 
         return (
             new_state,
