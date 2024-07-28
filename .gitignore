@@ -165,3 +165,5 @@ cython_debug/
 
 actions_records/
 
+actions_records.*
+lightning_logs/
