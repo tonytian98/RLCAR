@@ -1,6 +1,5 @@
 from ShapelyEnv import ShapelyEnv
 from time import sleep
-from pynput import keyboard
 from Record import Record
 
 

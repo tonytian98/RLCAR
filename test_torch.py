@@ -258,6 +258,7 @@ if __name__ == "__main__":
     )
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     num_gpus = torch.cuda.device_count()
+    print(device, num_gpus)
 
     algo = DeepQLearning(game_env)
 

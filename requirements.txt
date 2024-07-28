@@ -1,2 +1,9 @@
-pygame
+shapely
 opencv-python
+torch
+torchvision
+torchaudio
+geopandas
+pynput
+matplotlib
+pytorch-lightning
