@@ -203,7 +203,7 @@ class ShapelyEnv:
               of the ShapeEnv instance with the segmented track blocks.
 
         """
-        buffer_size = 1e-6
+        buffer_size = 1e-5
         reward_lines_size = len(self.reward_lines)
         step = 2
         for i in range(0, reward_lines_size, step):
@@ -485,8 +485,8 @@ class ShapelyEnv:
         unstopping_ray = LineString([(car_point.x, car_point.y), (x, y)])
         self.rays.append(self.get_stopped_ray(unstopping_ray, car_point))
 
-    def _join_threads(self, l: list) -> None:
-        for t in l:
+    def _join_threads(self, threads: list) -> None:
+        for t in threads:
             t.join()
 
     def update_rays(self):
@@ -758,7 +758,7 @@ class ShapelyEnv:
         Calculates the initial angle for the car at the start position.
 
         The start position is the centroid of the first track segment.
-        The angle of the car is that of the line connecting the centroids of the first two track segments.
+        The angle of the car is that of the line connecting the centroids of the first two reward lines.
 
         Parameters:
         None
@@ -767,16 +767,16 @@ class ShapelyEnv:
         float: The initial angle for the car in degrees [0, 360).
         """
         return self.calculate_line_angle(
-            self.segmented_track_in_order[0].centroid,
-            self.segmented_track_in_order[1].centroid,
+            self.reward_lines[0].centroid,
+            self.reward_lines[1].centroid,
         )
 
     def config_car_start(self, angle_adjustment: float = 0.0) -> None:
         """
         Configures the initial position and angle of the car.
 
-        The car's initial position is set to the centroid of the first track segment.
-        The car's initial angle is set to the angle of the line connecting the centroids of the first two track segments.
+        The car's initial position is set to the centroid of the first track reward line.
+        The car's initial angle is set to the angle of the line connecting the centroids of the first two reward lines.
 
         Parameters:
         angle_adjustment (float, optional): Increment car's initial angle by angle_adjustment. Default is 0.0.
@@ -788,7 +788,7 @@ class ShapelyEnv:
         This method is called when the auto_config_car_start flag is set to True during the game initialization.
         It sets the car's position and angle based on the processed track image.
         """
-        start_point = self.segmented_track_in_order[0].centroid
+        start_point = self.reward_lines[0].centroid
         self.car.set_car_coords(start_point.x, start_point.y)
         self.car.set_car_angle(self.calculate_car_start_angle() + angle_adjustment)
 
@@ -864,7 +864,7 @@ if __name__ == "__main__":
     height = 600
 
     # object creation
-    img_processor = ImageProcessor("map1.png", resize=[width, height])
+    img_processor = ImageProcessor("map3.png", resize=[width, height])
     car = Car(650, 100, 0, 90)
     game_env = ShapelyEnv(
         width,
@@ -877,6 +877,9 @@ if __name__ == "__main__":
     )
 
     # start game
+    print(len(game_env.segmented_track_in_order))
+    # game_env.plot_shapely_objs(game_env.segmented_track_in_order, color="black")
+    # time.sleep(5)
     game_env.start_game()
     # game_env.update_rays()
 #

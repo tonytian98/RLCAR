@@ -88,8 +88,8 @@ class ImageProcessor:
         return [(x1, y1) for x1, y1, x2, y2 in segments]
 
     def assign_closest_points(
-        self, points1: list[tuple[float, float]], points2: [tuple[float, float]]
-    ) -> list[list[tuple[float, float]]]:
+        self, points1: list[tuple[float, float]], points2: list[tuple[float, float]]
+    ) -> list[tuple[tuple[float, float]]]:
         """
         This function finds the closest point in 'points2' for each point in 'points1' and returns a list of these closest points.
         The function removes the assigned closest point from 'points2' to avoid duplicates.

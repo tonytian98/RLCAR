@@ -15,6 +15,8 @@ from torch.utils.data import DataLoader
 from pytorch_lightning import LightningModule, Trainer
 from pytorch_lightning.callbacks import EarlyStopping
 
+import time
+
 
 class ReplayBuffer:
     def __init__(self, capacity):
@@ -263,4 +265,10 @@ if __name__ == "__main__":
         max_epochs=1000,
         callbacks=EarlyStopping(monitor="episode/Return", mode="max", patience=500),
     )
+
+    start_time = time.time()
     trainer.fit(algo)
+    end_time = time.time()
+    execution_time = end_time - start_time
+
+    print(f"Execution time: {execution_time} seconds")

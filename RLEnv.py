@@ -68,7 +68,8 @@ class RLEnv(RecordEnv):
 
         self.LIFE_REWARD = 0
         self.GOAL_REWARD = 1
-        self.CRASH_REWARD = -5
+        self.CRASH_REWARD = -2
+        self.USELESS_ACTION_REWARD = -0.5
 
     def get_ray_length_avg_std(self) -> tuple[float, float]:
         arr = np.array(self.get_ray_lengths())
@@ -131,6 +132,24 @@ class RLEnv(RecordEnv):
         return (value - mean) / std
 
     def get_state(self):
+        """
+        Calculates and returns the current state of the RL environment.
+
+        The state is a list containing standardized values of various parameters:
+        - Distance to the next track segment
+        - Car speed
+        - Difference between the car's current angle and the target angle
+
+        - Ray lengths from the car to the track boundaries
+
+        The state is standardized using the mean and standard deviation of each parameter.
+
+        Parameters:
+        None
+
+        Returns:
+        list: A list containing standardized values representing the current state of the RL environment.
+        """
         car_speed_standardized = self.standardize(
             self.car.get_car_speed(), self.AVG_CAR_SPEED, self.STD_CAR_SPEED
         )
@@ -158,9 +177,9 @@ class RLEnv(RecordEnv):
         # If the car arrived in the next target segment, but not segment 0 (final destination)
 
         return [
+            distance_to_next_segment_standardized,
             car_speed_standardized,
             angle_difference_standardized,
-            distance_to_next_segment_standardized,
         ] + ray_lengths_standardized
 
     def get_state_size(self):
@@ -192,6 +211,11 @@ class RLEnv(RecordEnv):
 
     def step(self, action: int):
         """execute the action in game env and return the new state, reward, terminated, (truncated, info)"""
+        reward = 0
+        if self.car.get_car_speed() == 0:
+            if self.action_space.descriptive_action_by_action(action) != "accelerate":
+                reward += self.USELESS_ACTION_REWARD
+
         self.execute_car_logic(action)
         self.action_record.set_current_value(action)
         self.action_record.add_current_Value_to_record()  # print
@@ -202,12 +226,12 @@ class RLEnv(RecordEnv):
             self.update_game_frame([self.car.get_shapely_point()] + self.rays)
         self.current_step += 1
         new_state = self.get_state()
-        reward = 0
+
         running = not self.game_end()
         if not running:
             reward = self.CRASH_REWARD
 
-        elif self.reached_next_segment(new_state[2]):
+        elif self.reached_next_segment(new_state[0]):
             reward = self.GOAL_REWARD
 
         return (
@@ -223,12 +247,6 @@ class RLEnv(RecordEnv):
         self.action_record.save_record_to_txt()
         self.current_step = 0
         self.current_segmented_track_index = 0
-
-    def record(
-        self, episode_trigger
-    ):  # episode_trigger is a lambda function to tell which episode to record
-        ###TO DO: record the episode's actions and rewards
-        pass
 
     def start_game_RL(self):
         """

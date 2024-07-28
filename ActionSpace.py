@@ -13,7 +13,7 @@ class ActionSpace:
         None: It will generate the action space in the form of [0, 1, ..., len(descriptive actions)].
             Action space consists of integers(actions) from 0 to (len(descriptive actions) - 1).
         """
-        self.descriptive_actions = descriptive_actions
+        self.descriptive_actions: list[str] = descriptive_actions
         self.actions = [i for i in range(len(descriptive_actions))]
         self.n = len(self.actions)
 

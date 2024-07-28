@@ -31,7 +31,9 @@ class Record:
 
         self.set_time_in_file_name = set_time_in_file_name
 
-        self.dir_name = f"{name}_records"
+        self.dir_name = (
+            f"{name}_records_{datetime.now().strftime("_%Y_%m_%d_%H_%M_%S")}"
+        )
         os.makedirs(self.dir_name, exist_ok=True)
         self.load_replay_records_in_dir()
 
@@ -77,7 +79,7 @@ class Record:
         self.clear_current_value()
         self.record = []
 
-    def save_record_to_txt(self):
+    def save_record_to_txt(self, suffix=""):
         """
         Saves the record to a text file.
         After saving, all current records will be cleared.
@@ -90,7 +92,7 @@ class Record:
             str: The name of the saved text file.
         """
         saved_file_path = os.path.join(
-            self.dir_name, self.name + self.start_time + ".txt"
+            self.dir_name, self.name + self.start_time + suffix + ".txt"
         )
         with open(saved_file_path, "w") as f:
             text = self.separator.join(self.record)
