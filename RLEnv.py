@@ -67,10 +67,11 @@ class RLEnv(RecordEnv):
         self.current_step = 0
 
         self.LIFE_REWARD = 0
-        self.GOAL_REWARD = 2
-        self.CRASH_REWARD = -2
-        self.USELESS_ACTION_REWARD = -0.5
-        self.TURN_REWARD = -0.1
+        self.GOAL_REWARD = 5
+        self.CRASH_REWARD = -5
+        self.USELESS_ACTION_REWARD = -0.1
+        self.WRONG_DIRECTION_REWARD = -0.1
+        self.TURN_REWARD = -0.03
 
     def get_ray_length_avg_std(self) -> tuple[float, float]:
         arr = np.array(self.get_ray_lengths())
@@ -154,13 +155,13 @@ class RLEnv(RecordEnv):
         car_speed_standardized = self.standardize(
             self.car.get_car_speed(), self.AVG_CAR_SPEED, self.STD_CAR_SPEED
         )
-        """
+
         angle_difference_standardized = self.standardize(
             self.get_difference_car_angle_target_angle(),
             self.AVG_ANGLE_DIFFERENCE,
             self.STD_ANGLE_DIFFERENCE,
         )
-        """
+
         target_segment_index = (self.current_segmented_track_index + 1) % len(
             self.segmented_track_in_order
         )
@@ -182,7 +183,7 @@ class RLEnv(RecordEnv):
         return [
             distance_to_next_segment_standardized,
             car_speed_standardized,
-            # angle_difference_standardized,
+            angle_difference_standardized,
         ] + ray_lengths_standardized
 
     def get_state_size(self):
@@ -232,6 +233,13 @@ class RLEnv(RecordEnv):
             self.update_game_frame([self.car.get_shapely_point()] + self.rays)
         self.current_step += 1
         new_state = self.get_state()
+
+        if np.abs(new_state[2]) > self.standardize(
+            135,
+            self.AVG_ANGLE_DIFFERENCE,
+            self.STD_ANGLE_DIFFERENCE,
+        ):
+            reward += self.WRONG_DIRECTION_REWARD
 
         running = not self.game_end()
         if not running:
