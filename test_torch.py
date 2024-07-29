@@ -58,17 +58,17 @@ class DeepQLearning(LightningModule):
     def __init__(
         self,
         env: RLEnv,  # game environment with an epsilon greedy policy
-        capacity: int = 10_000,  # capacity of the replay buffer
+        capacity: int = 100_000,  # capacity of the replay buffer
         batch_size: int = 256,  # batch size for training
-        hidden_sizes: list[int] = [128],  # hidden sizes for the neural network
+        hidden_sizes: list[int] = [128, 64],  # hidden sizes for the neural network
         lr: float = 1e-3,  # learning rate for optimizer
         loss_fn=F.smooth_l1_loss,  # loss function
         optimizer=AdamW,  # optimizer that updates the model parameters
-        gamma: float = 0.99,  # discount factor for accumulating rewards
+        gamma: float = 0.8,  # discount factor for accumulating rewards
         eps_start: float = 1.0,  # starting epsilon for epsilon greedy policy
         eps_end: float = 0.1,  # ending epsilon for epsilon greedy policy
         eps_last_episode: int = 150,  # number of episodes used to decay epsilon to eps_end
-        samples_per_epoch: int = 5_000,  # number of samples needed per training episode
+        samples_per_epoch: int = 10_000,  # number of samples needed per training episode
         sync_rate: int = 10,  # number of epochs before we update the policy network using the target network
     ):
         """
@@ -175,8 +175,8 @@ class DeepQLearning(LightningModule):
         max_num_worker_suggest = len(os.sched_getaffinity(0))
         if max_num_worker_suggest is None:
             if max_num_worker_suggest is None:
-            # os.cpu_count() could return Optional[int]
-            # get cpu count first and check None in order to satify mypy check
+                # os.cpu_count() could return Optional[int]
+                # get cpu count first and check None in order to satify mypy check
                 cpu_count = os.cpu_count()
                 if cpu_count is not None:
                     max_num_worker_suggest = cpu_count
@@ -184,7 +184,9 @@ class DeepQLearning(LightningModule):
             num_workers = max_num_worker_suggest
         else:
             num_workers = 5
-        return DataLoader(dataset, batch_size=self.hparams.batch_size, num_workers=num_workers)
+        return DataLoader(
+            dataset, batch_size=self.hparams.batch_size, num_workers=num_workers
+        )
 
     def training_step(self, batch, batch_idx):
         """
@@ -258,14 +260,14 @@ if __name__ == "__main__":
 
     # object creation
     img_processor = ImageProcessor("map1.png", resize=[width, height])
-    car = Car(650, 100, 0, 90,max_forward_speed = 6)
+    car = Car(650, 100, 0, 90, max_forward_speed=5)
     game_env = RLEnv(
         ActionSpace(["hold", "accelerate", "decelerate", "steer_left", "steer_right"]),
         img_processor,
         car,
         show_game=False,
         save_processed_track=True,
-        maximum_steps = 1000
+        maximum_steps=5000,
     )
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     num_gpus = torch.cuda.device_count()
@@ -274,8 +276,8 @@ if __name__ == "__main__":
     algo = DeepQLearning(game_env)
 
     trainer = Trainer(
-        max_epochs=800,
-        callbacks=EarlyStopping(monitor="episode/Return", mode="max", patience=200),
+        max_epochs=1000,
+        callbacks=EarlyStopping(monitor="episode/Return", mode="max", patience=500),
     )
 
     start_time = time.time()

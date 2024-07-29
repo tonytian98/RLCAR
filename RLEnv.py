@@ -70,6 +70,7 @@ class RLEnv(RecordEnv):
         self.GOAL_REWARD = 2
         self.CRASH_REWARD = -2
         self.USELESS_ACTION_REWARD = -0.5
+        self.TURN_REWARD = -0.1
 
     def get_ray_length_avg_std(self) -> tuple[float, float]:
         arr = np.array(self.get_ray_lengths())
@@ -153,11 +154,13 @@ class RLEnv(RecordEnv):
         car_speed_standardized = self.standardize(
             self.car.get_car_speed(), self.AVG_CAR_SPEED, self.STD_CAR_SPEED
         )
+        """
         angle_difference_standardized = self.standardize(
             self.get_difference_car_angle_target_angle(),
             self.AVG_ANGLE_DIFFERENCE,
             self.STD_ANGLE_DIFFERENCE,
         )
+        """
         target_segment_index = (self.current_segmented_track_index + 1) % len(
             self.segmented_track_in_order
         )
@@ -179,7 +182,7 @@ class RLEnv(RecordEnv):
         return [
             distance_to_next_segment_standardized,
             car_speed_standardized,
-            angle_difference_standardized,
+            # angle_difference_standardized,
         ] + ray_lengths_standardized
 
     def get_state_size(self):
@@ -212,8 +215,11 @@ class RLEnv(RecordEnv):
     def step(self, action: int):
         """execute the action in game env and return the new state, reward, terminated, (truncated, info)"""
         reward = 0
+        descriptive_action = self.action_space.descriptive_action_by_action(action)
+        if descriptive_action == "steer_left" or descriptive_action == "steer_right":
+            reward += self.TURN_REWARD
         if self.car.get_car_speed() == 0:
-            if self.action_space.descriptive_action_by_action(action) != "accelerate":
+            if descriptive_action != "accelerate":
                 reward += self.USELESS_ACTION_REWARD
 
         self.execute_car_logic(action)
