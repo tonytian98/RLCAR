@@ -32,7 +32,7 @@ class Record:
         self.set_time_in_file_name = set_time_in_file_name
 
         self.dir_name = (
-            f"{name}_records_{datetime.now().strftime('_%Y_%m_%d_%H_%M_%S')}"
+            f"./records/{name}_records_{datetime.now().strftime('_%Y_%m_%d_%H_%M_%S')}"
         )
         os.makedirs(self.dir_name, exist_ok=True)
         self.load_replay_records_in_dir()

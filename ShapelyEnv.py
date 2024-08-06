@@ -10,6 +10,8 @@ from ImageProcessor import ImageProcessor
 from Car import Car
 from multiprocessing import Process
 
+from pynput import keyboard
+
 
 class ShapelyEnv:
     def __init__(
@@ -31,6 +33,7 @@ class ShapelyEnv:
         self.track: Polygon = None
         self.inverse_track: Polygon = None
         self.segmented_track_in_order: list[Polygon] = []
+        self.reward_lines_in_order: list[LineString] = []
         self.car: Car = None
         self.rays: list[LineString] = []
         self.image_path: str = ""
@@ -202,7 +205,7 @@ class ShapelyEnv:
               of the ShapeEnv instance with the segmented track blocks.
 
         """
-        buffer_size = 1e-5
+        buffer_size = 2.5  # 1e-5
         reward_lines_size = len(self.reward_lines)
         step = 2
         for i in range(0, reward_lines_size, step):
@@ -220,6 +223,9 @@ class ShapelyEnv:
             )[0]
 
             self.segmented_track_in_order.append(segmented_track)
+            self.reward_lines_in_order.append(self.reward_lines[i])
+
+        # self.plot_shapely_objs(self.segmented_track_in_order)
 
     def get_number_of_segmented_tracks(self):
         return len(self.segmented_track_in_order)
@@ -851,6 +857,7 @@ class ShapelyEnv:
         while running:
             self.car.update_car_position()
             self.update_rays()
+
             if self.show_game:
                 self.update_game_frame([self.car.get_shapely_point()] + self.rays)
             running = not self.game_end()
@@ -863,7 +870,7 @@ if __name__ == "__main__":
     height = 600
 
     # object creation
-    img_processor = ImageProcessor("map3.png", resize=[width, height])
+    img_processor = ImageProcessor("map1.png", resize=[width, height])
     car = Car(650, 100, 0, 90)
     game_env = ShapelyEnv(
         width,
@@ -874,9 +881,8 @@ if __name__ == "__main__":
         save_processed_track=True,
         auto_config_car_start=True,
     )
-
+    # game_env.set_track_environment(img_processor)
     # start game
-    print(len(game_env.segmented_track_in_order))
     # game_env.plot_shapely_objs(game_env.segmented_track_in_order, color="black")
     # time.sleep(5)
     game_env.start_game()

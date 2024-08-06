@@ -162,8 +162,5 @@ cython_debug/
 # conda environment
 .conda
 
-
-actions_records/
-
-actions_records.*
-lightning_logs/
+record/**
+lightning_logs/**

@@ -14,7 +14,7 @@ from torch.utils.data.dataset import IterableDataset
 from torch.utils.data import DataLoader
 from pytorch_lightning import LightningModule, Trainer
 from pytorch_lightning.callbacks import EarlyStopping
-
+from pytorch_lightning.loggers import CSVLogger
 import time
 
 
@@ -172,14 +172,7 @@ class DeepQLearning(LightningModule):
         # yield list of randomly sampled experiences of length self.hparams.samples_per_epoch
 
         dataset = RLDataset(self.buffer, sample_size=self.hparams.samples_per_epoch)
-        max_num_worker_suggest = len(os.sched_getaffinity(0))
-        if max_num_worker_suggest is None:
-            if max_num_worker_suggest is None:
-                # os.cpu_count() could return Optional[int]
-                # get cpu count first and check None in order to satify mypy check
-                cpu_count = os.cpu_count()
-                if cpu_count is not None:
-                    max_num_worker_suggest = cpu_count
+        max_num_worker_suggest = os.cpu_count()
         if max_num_worker_suggest:
             num_workers = max_num_worker_suggest
         else:
@@ -273,10 +266,14 @@ if __name__ == "__main__":
     num_gpus = torch.cuda.device_count()
     print(device, num_gpus)
 
+    # Initialize CSV logger
+    csv_logger = CSVLogger(save_dir="logs/", name="my_model")
+
     algo = DeepQLearning(game_env)
 
     trainer = Trainer(
         max_epochs=1000,
+        logger=csv_logger,
         callbacks=EarlyStopping(monitor="episode/Return", mode="max", patience=500),
     )
 

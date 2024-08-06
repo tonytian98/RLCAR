@@ -90,6 +90,33 @@ class RLEnv(RecordEnv):
         arr = np.array(distances)
         return np.mean(arr), np.std(arr)
 
+    def normalize(self, value, min_val, max_val):
+        return (value - min_val) / (max_val - min_val)
+
+    def standardize(self, value, mean, std):
+        if isinstance(value, list):
+            return [self.standardize(x, mean, std) for x in value]
+        return (value - mean) / std
+
+    def get_current_segmented_track_index(self) -> int:
+        """
+        Determines the index of the segmented track that the car is currently in.
+
+        The function iterates over each segmented track in the order they were created.
+        It checks if the car's current position is within the boundaries of the current segmented track.
+        If the car's position is within the boundaries of a segmented track, the function returns the index of that segmented track.
+
+        Parameters:
+        None
+
+        Returns:
+        int: The index of the segmented track that the car is currently in.
+        """
+        for i, seg_track in enumerate(self.segmented_track_in_order):
+            if seg_track.contains(self.car.get_shapely_point()):
+                return i
+        return None
+
     def get_target_angle(self) -> float:
         """
         Target angle is the angle of the line that connects the car and centroid of the next track segment,
@@ -102,7 +129,7 @@ class RLEnv(RecordEnv):
         """
         return self.calculate_line_angle(
             self.car.get_shapely_point(),
-            self.segmented_track_in_order[
+            self.reward_lines_in_order[
                 (self.current_segmented_track_index + 1)
                 % self.get_number_of_segmented_tracks()
             ].centroid,
@@ -124,14 +151,6 @@ class RLEnv(RecordEnv):
         if difference <= -180:
             return difference + 360
         return difference
-
-    def normalize(self, value, min_val, max_val):
-        return (value - min_val) / (max_val - min_val)
-
-    def standardize(self, value, mean, std):
-        if isinstance(value, list):
-            return [self.standardize(x, mean, std) for x in value]
-        return (value - mean) / std
 
     def get_state(self):
         """
